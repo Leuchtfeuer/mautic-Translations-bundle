@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use Mautic\CoreBundle\DependencyInjection\MauticCoreExtension;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
 return function (ContainerConfigurator $configurator): void {
     $services = $configurator->services()
@@ -12,7 +13,6 @@ return function (ContainerConfigurator $configurator): void {
     $services->load('MauticPlugin\\AiTranslateBundle\\', '../')
         ->exclude('../{'.implode(',', MauticCoreExtension::DEFAULT_EXCLUDES).'}');
 
-    // (Optional explicit) keep Deepl client explicit if you like
     $services->set(MauticPlugin\AiTranslateBundle\Service\DeeplClientService::class)
-        ->args(['@mautic.helper.integration']);
+        ->arg('$integrationHelper', service('mautic.helper.integration'));
 };
