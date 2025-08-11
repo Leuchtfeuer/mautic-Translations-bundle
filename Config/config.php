@@ -1,4 +1,5 @@
 <?php
+// plugins/AiTranslateBundle/Config/config.php
 
 return [
     'name'        => 'AI Translate',
@@ -32,4 +33,19 @@ return [
         ],
     ],
 
+    'routes' => [
+        'main' => [
+            // This route will handle the main translation action
+            'plugin_ai_translate_action_translate' => [
+                'path'       => '/plugin/ai-translate/email/{objectId}/translate',
+                'controller' => 'MauticPlugin\AiTranslateBundle\Controller\EmailActionController::translateAction',
+            ],
+        ],
+        'public' => [
+            'plugin_ai_translate_test_api' => [
+                'path'       => '/plugin/ai-translate/test-api',
+                'controller' => 'MauticPlugin\AiTranslateBundle\Controller\ApiTestController::testApiAction',
+            ],
+        ]
+    ],
 ];
