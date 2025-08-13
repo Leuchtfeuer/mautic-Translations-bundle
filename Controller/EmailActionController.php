@@ -3,6 +3,7 @@
 
 namespace MauticPlugin\AiTranslateBundle\Controller;
 
+use Doctrine\DBAL\Connection;
 use Mautic\CoreBundle\Controller\FormController;
 use Mautic\CoreBundle\Security\Permissions\CorePermissions;
 use Mautic\EmailBundle\Entity\Email;
@@ -19,7 +20,8 @@ class EmailActionController extends FormController
         int $objectId,
         DeeplClientService $deepl,
         LoggerInterface $logger,
-        CorePermissions $security
+        CorePermissions $security,
+        Connection $conn
     ): Response {
         $logger->info('[AiTranslate] translateAction start', [
             'objectId'   => $objectId,
@@ -51,22 +53,55 @@ class EmailActionController extends FormController
 
         $sourceLangGuess = $sourceEmail->getLanguage() ?: '';
         $emailName       = $sourceEmail->getName() ?: '';
+        $isCodeMode      = $sourceEmail->getTemplate() === 'mautic_code_mode';
 
-        // Probe DeepL
+        // 1) Probe DeepL quickly
         $probe = $deepl->translate('Hello from Mautic', $targetLang);
 
-        $payload = [
-            'success'            => (bool) ($probe['success'] ?? false),
-            'message'            => $probe['success']
-                ? 'Probe OK. Ready for next step (cloning/translation not executed yet).'
-                : ('Probe failed: '.($probe['error'] ?? 'Unknown error')),
-            'emailId'            => $sourceEmail->getId(),
-            'emailName'          => $emailName,
-            'sourceLangGuess'    => $sourceLangGuess,
-            'targetLang'         => $targetLang,
+        // 2) Read MJML from GrapesJS builder storage:
+        //    table: bundle_grapesjsbuilder, column: custom_mjml, key: email_id
+        $mjml     = '';
+        $tableHit = null;
 
-            // Surface all diagnostics from the service so you can see the key & host:
-            'deeplProbe'         => [
+        try {
+            $sql  = 'SELECT custom_mjml FROM bundle_grapesjsbuilder WHERE email_id = :id LIMIT 1';
+            $row  = $conn->fetchAssociative($sql, ['id' => $sourceEmail->getId()]);
+            $mjml = isset($row['custom_mjml']) ? (string) $row['custom_mjml'] : '';
+            $tableHit = 'bundle_grapesjsbuilder.custom_mjml';
+        } catch (\Throwable $e) {
+            $logger->error('[AiTranslate] Failed to fetch MJML from bundle_grapesjsbuilder', [
+                'emailId' => $sourceEmail->getId(),
+                'ex'      => $e->getMessage(),
+            ]);
+        }
+
+        $snippet = mb_substr($mjml, 0, 200);
+        $logger->info('[AiTranslate] MJML fetch result', [
+            'emailId'     => $sourceEmail->getId(),
+            'table'       => $tableHit,
+            'found'       => $mjml !== '',
+            'length'      => mb_strlen($mjml),
+            'snippet_len' => mb_strlen($snippet),
+            'codeMode'    => $isCodeMode,
+        ]);
+
+        $payload = [
+            'success'         => (bool) ($probe['success'] ?? false),
+            'message'         => $probe['success']
+                ? 'Probe OK. MJML fetched. Next step: clone (no translation yet).'
+                : ('Probe failed: '.($probe['error'] ?? 'Unknown error')),
+            'emailId'         => $sourceEmail->getId(),
+            'emailName'       => $emailName,
+            'sourceLangGuess' => $sourceLangGuess,
+            'targetLang'      => $targetLang,
+            'isCodeMode'      => $isCodeMode,
+            'mjml'            => [
+                'table'   => $tableHit,
+                'found'   => $mjml !== '',
+                'length'  => mb_strlen($mjml),
+                'snippet' => $snippet,
+            ],
+            'deeplProbe'      => [
                 'success'     => (bool) ($probe['success'] ?? false),
                 'translation' => $probe['translation'] ?? null,
                 'error'       => $probe['error'] ?? null,
@@ -75,11 +110,15 @@ class EmailActionController extends FormController
                 'status'      => $probe['status'] ?? null,
                 'body'        => $probe['body'] ?? null,
             ],
-
-            'note'               => 'This is a dry run to verify inputs and DeepL access. No cloning yet.',
+            'note'            => 'Dry run: only fetched MJML. No cloning or translation yet.',
         ];
 
-        $logger->info('[AiTranslate] translateAction payload', $payload);
+        $logger->info('[AiTranslate] translateAction payload (probe + mjml)', [
+            'success'    => $payload['success'],
+            'mjml_found' => $payload['mjml']['found'],
+            'mjml_table' => $payload['mjml']['table'],
+            'codeMode'   => $isCodeMode,
+        ]);
 
         return new JsonResponse($payload);
     }
