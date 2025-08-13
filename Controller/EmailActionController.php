@@ -46,17 +46,19 @@ class EmailActionController extends FormController
             return new JsonResponse(['success' => false, 'message' => 'Email not found or access denied.'], Response::HTTP_NOT_FOUND);
         }
 
-        $targetLang = strtoupper((string) $request->get('targetLang', ''));
-        if ($targetLang === '') {
+        // DeepL wants uppercase; Mautic Email.language wants lowercase ISO 639-1
+        $targetLangApi = strtoupper((string) $request->get('targetLang', '')); // e.g. "DE"
+        if ($targetLangApi === '') {
             return new JsonResponse(['success' => false, 'message' => 'Target language not provided.'], Response::HTTP_BAD_REQUEST);
         }
+        $targetLangIso = strtolower($targetLangApi); // e.g. "de"
 
-        $sourceLangGuess = $sourceEmail->getLanguage() ?: '';
+        $sourceLangGuess = strtolower($sourceEmail->getLanguage() ?: ''); // normalize for consistency
         $emailName       = $sourceEmail->getName() ?: '';
         $isCodeMode      = $sourceEmail->getTemplate() === 'mautic_code_mode';
 
-        // 1) Probe DeepL quickly
-        $probe = $deepl->translate('Hello from Mautic', $targetLang);
+        // 1) Quick DeepL probe (use UPPER for API)
+        $probe = $deepl->translate('Hello from Mautic', $targetLangApi);
 
         // 2) Read MJML from GrapesJS builder storage (bundle_grapesjsbuilder.custom_mjml)
         $mjml     = '';
@@ -74,61 +76,45 @@ class EmailActionController extends FormController
             ]);
         }
 
-        // 3) Manually create a cloned Email entity (copy only safe fields)
+        // 3) Clone the entity (Mautic pattern) and FIX language casing
         try {
-            $clone = new Email();
+            $emailType = $sourceEmail->getEmailType();
 
-            // Name with language suffix
-            $suffix = sprintf(' [%s]', $targetLang);
-            if (method_exists($clone, 'setName')) {
-                $clone->setName(rtrim(($emailName ?: 'Email').$suffix));
-            }
+            /** @var Email $clone */
+            $clone = clone $sourceEmail;
 
-            // Copy subject
-            if (method_exists($clone, 'setSubject') && method_exists($sourceEmail, 'getSubject')) {
-                $clone->setSubject((string) $sourceEmail->getSubject());
-            }
+            // Restore fields / set our adjustments
+            $clone->setIsPublished(false);
+            $clone->setEmailType($emailType);
+            $clone->setVariantParent(null);
 
-            // Copy template
-            if (method_exists($clone, 'setTemplate') && method_exists($sourceEmail, 'getTemplate')) {
-                $clone->setTemplate((string) $sourceEmail->getTemplate());
-            }
+            // Name + target language suffix
+            $clone->setName(rtrim(($emailName ?: 'Email').' ['.$targetLangApi.']'));
 
-            // Copy language (mark as target)
-            if (method_exists($clone, 'setLanguage')) {
-                $clone->setLanguage($targetLang ?: $sourceLangGuess);
-            }
+            // IMPORTANT: Mautic expects lowercase language code
+            $clone->setLanguage($targetLangIso ?: $sourceLangGuess);
 
-            // Copy customHtml from source to avoid PlainTextHelper::$html = null when viewing
-            $sourceHtml = method_exists($sourceEmail, 'getCustomHtml') ? $sourceEmail->getCustomHtml() : null;
+            // Ensure HTML is not null (prevents PlainTextHelper error on /view)
+            $sourceHtml = $sourceEmail->getCustomHtml();
             if ($sourceHtml === null) {
                 $sourceHtml = '<!doctype html><html><body></body></html>';
             }
-            if (method_exists($clone, 'setCustomHtml')) {
-                $clone->setCustomHtml($sourceHtml);
-            }
+            $clone->setCustomHtml($sourceHtml);
 
-            // Optionally copy a few other safe, common fields if available (guarded)
-            if (method_exists($clone, 'setDescription') && method_exists($sourceEmail, 'getDescription')) {
-                $clone->setDescription((string) $sourceEmail->getDescription());
-            }
-            if (method_exists($clone, 'setIsPublished')) {
-                $clone->setIsPublished(false); // keep draft by default
-            }
-
-            // Persist to get an ID
+            // Persist clone to get its ID
             $model->saveEntity($clone);
         } catch (\Throwable $e) {
-            $logger->error('[AiTranslate] Clone (manual new Email) failed', ['ex' => $e->getMessage()]);
+            $logger->error('[AiTranslate] Clone (entity __clone) failed', ['ex' => $e->getMessage()]);
             return new JsonResponse([
                 'success' => false,
                 'message' => 'Failed to clone email: '.$e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
-        // 4) Write MJML for the cloned email ID (if we found MJML on the source)
+        // 4) Write MJML for the cloned email ID (copy source MJML if present)
         $cloneId   = (int) $clone->getId();
         $mjmlWrite = false;
+
         if ($mjml !== '') {
             try {
                 // UPDATE first
@@ -162,15 +148,16 @@ class EmailActionController extends FormController
             'source'    => [
                 'emailId'   => $sourceEmail->getId(),
                 'name'      => $emailName,
-                'language'  => $sourceLangGuess,
+                'language'  => $sourceLangGuess,      // e.g. "en"
                 'template'  => $sourceEmail->getTemplate(),
             ],
             'clone'     => [
                 'emailId'   => $cloneId,
-                'name'      => method_exists($clone, 'getName') ? $clone->getName() : ('Email '.$cloneId),
-                'subject'   => method_exists($clone, 'getSubject') ? $clone->getSubject() : '',
-                'subjectTranslated' => false, // not yet
-                'template'  => method_exists($clone, 'getTemplate') ? $clone->getTemplate() : '',
+                'name'      => $clone->getName(),
+                'subject'   => $clone->getSubject(),
+                'subjectTranslated' => false,
+                'template'  => $clone->getTemplate(),
+                'language'  => $clone->getLanguage(), // should be lowercase (e.g. "de")
                 'mjmlWrite' => $mjmlWrite,
                 'urls'      => [
                     'edit'    => $request->getSchemeAndHttpHost().'/s/emails/edit/'.$cloneId,
@@ -190,10 +177,11 @@ class EmailActionController extends FormController
             'note' => 'Cloned entity + copied MJML and HTML. Next step: translate content inside MJML.',
         ];
 
-        $logger->info('[AiTranslate] clone done (manual)', [
-            'sourceId'  => $sourceEmail->getId(),
-            'cloneId'   => $cloneId,
-            'mjmlWrite' => $mjmlWrite,
+        $logger->info('[AiTranslate] clone done (entity __clone)', [
+            'sourceId'   => $sourceEmail->getId(),
+            'cloneId'    => $cloneId,
+            'mjmlWrite'  => $mjmlWrite,
+            'cloneLang'  => $clone->getLanguage(),
         ]);
 
         return new JsonResponse($payload);
