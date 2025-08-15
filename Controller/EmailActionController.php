@@ -180,9 +180,16 @@ class EmailActionController extends FormController
         }
 
         // 6) Done
+        // (Only the payload/message block is intentionally changed below)
+        $lockedMode  = isset($mj['lockedMode']) ? (bool) $mj['lockedMode'] : false;
+        $lockedPairs = isset($mj['lockedPairs']) ? (int) $mj['lockedPairs'] : 0;
+        $notice = $lockedMode
+            ? 'Now translating content as defined by markers'
+            : 'Now translating entire content (no markers found)';
+
         $payload = [
             'success' => true,
-            'message' => 'Clone created and translation completed (custom_html updated from compiled MJML).',
+            'message' => $notice . ' — Done.',
             'source'  => [
                 'emailId'   => $sourceEmail->getId(),
                 'name'      => $emailName,
@@ -207,6 +214,8 @@ class EmailActionController extends FormController
                 'subjectChanged' => ($translatedSubject !== null),
                 'mjmlChanged'    => ($translatedMjml !== null),
                 'samples'        => array_slice($samples, 0, 4),
+                'lockedMode'     => $lockedMode,
+                'lockedPairs'    => $lockedPairs,
             ],
             'deeplProbe' => [
                 'success'     => (bool) ($probe['success'] ?? false),
