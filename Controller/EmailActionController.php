@@ -176,11 +176,9 @@ class EmailActionController extends FormController
             $model->saveEntity($clone);
         } catch (\Throwable $e) {
             $logger->error('[AiTranslate] Translation / compile step failed', ['cloneId' => $cloneId, 'ex' => $e->getMessage()]);
-            // We still return details so you can inspect
         }
 
         // 6) Done
-        // (Only the payload/message block is intentionally changed below)
         $lockedMode  = isset($mj['lockedMode']) ? (bool) $mj['lockedMode'] : false;
         $lockedPairs = isset($mj['lockedPairs']) ? (int) $mj['lockedPairs'] : 0;
         $notice = $lockedMode
@@ -189,7 +187,8 @@ class EmailActionController extends FormController
 
         $payload = [
             'success' => true,
-            'message' => $notice . ' — Done.',
+            // ️ Add explicit builder/save instruction to the message
+            'message' => $notice . ' - Done. Please open the Email Builder, review the changes, and click Save to persist them.',
             'source'  => [
                 'emailId'   => $sourceEmail->getId(),
                 'name'      => $emailName,

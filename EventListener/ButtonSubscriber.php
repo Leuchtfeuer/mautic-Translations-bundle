@@ -78,7 +78,14 @@ class ButtonSubscriber implements EventSubscriberInterface
   })
   .then(function(r){ return r.json(); })
   .then(function(d){
-      alert(d && d.message ? d.message : 'Done.');
+      var baseMsg = (d && d.message ? d.message : 'Done.');
+      var warn = '\\n\\nNext step: open the Email Builder, review the translated content, and click Save.';
+      alert(baseMsg + warn);
+
+      // Redirect to edit page of the cloned email
+      if (d && d.clone && d.clone.urls && d.clone.urls.edit) {
+          location.href = d.clone.urls.edit;
+      }
   })
   .catch(function(err){
       console.error('AiTranslate error:', err);
