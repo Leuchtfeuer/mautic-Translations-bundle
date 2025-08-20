@@ -34,7 +34,7 @@ class MjmlTranslateService
 
         // If there were no markers at all, keep existing single-pass behavior
         if ($segments['pairs'] === 0 && !$segments['sawAnyMarker']) {
-            $out = $this->translateMjmlSegmentCore($mjml, $targetLangApi, $samples);
+            $out     = $this->translateMjmlSegmentCore($mjml, $targetLangApi, $samples);
             $changed = ($out !== $original);
             $this->log('[AiTranslate][MJML] translateMjml done (no markers)', [
                 'changed' => $changed,
@@ -95,31 +95,26 @@ class MjmlTranslateService
      */
     private function translateMjmlSegmentCore(string $frag, string $targetLangApi, array &$samples): string
     {
-        $original = $frag;
-
         // Skip translating anything inside <mj-raw>…</mj-raw>
         $rawBlocks = [];
         $frag = $this->extractAndShieldMjRaw($frag, $rawBlocks);
 
         // 1) <mj-preview>
         $frag = preg_replace_callback('/<mj-preview>(.*?)<\/mj-preview>/si', function ($m) use ($targetLangApi, &$samples) {
-            $inner = $m[1];
-            $translated = $this->translateRichText($inner, $targetLangApi, $samples);
-            return '<mj-preview>' . $translated . '</mj-preview>';
+            $translated = $this->translateRichText($m[1], $targetLangApi, $samples);
+            return '<mj-preview>'.$translated.'</mj-preview>';
         }, $frag);
 
         // 2) <mj-text>…</mj-text>
         $frag = preg_replace_callback('/<mj-text\b[^>]*>(.*?)<\/mj-text>/si', function ($m) use ($targetLangApi, &$samples) {
-            $inner = $m[1];
-            $translated = $this->translateRichText($inner, $targetLangApi, $samples);
+            $translated = $this->translateRichText($m[1], $targetLangApi, $samples);
             return str_replace($m[1], $translated, $m[0]);
         }, $frag);
 
         // 3) <mj-button>…</mj-button> (label) + title=""
         $frag = preg_replace_callback('/<mj-button\b([^>]*)>(.*?)<\/mj-button>/si', function ($m) use ($targetLangApi, &$samples) {
-            $attrs = $m[1];
-            $inner = $m[2];
-
+            $attrs   = $m[1];
+            $inner   = $m[2];
             $innerTr = $this->translateRichText($inner, $targetLangApi, $samples);
 
             $attrsTr = preg_replace_callback('/\btitle="([^"]*)"/i', function ($mm) use ($targetLangApi, &$samples) {
@@ -127,18 +122,19 @@ class MjmlTranslateService
                 return 'title="'.htmlspecialchars($t, ENT_QUOTES).'"';
             }, $attrs);
 
-            return '<mj-button' . $attrsTr . '>' . $innerTr . '</mj-button>';
+            return '<mj-button'.$attrsTr.'>'.$innerTr.'</mj-button>';
         }, $frag);
 
-        // 4) <mj-image alt="">
-        $frag = preg_replace_callback('/<mj-image\b([^>]*)>/si', function ($m) use ($targetLangApi, &$samples) {
-            $attrs = $m[1];
+        // 4) <mj-image alt="">  (preserve self-closing)
+        $frag = preg_replace_callback('/<mj-image\b([^>]*?)(\s*\/?)>/si', function ($m) use ($targetLangApi, &$samples) {
+            $attrs   = $m[1];
+            $closing = $m[2] ?: '';
             $attrsTr = preg_replace_callback('/\balt="([^"]*)"/i', function ($mm) use ($targetLangApi, &$samples) {
                 $t = $this->translateRichText($mm[1], $targetLangApi, $samples);
                 return 'alt="'.htmlspecialchars($t, ENT_QUOTES).'"';
             }, $attrs);
 
-            return '<mj-image' . $attrsTr . '>';
+            return '<mj-image'.$attrsTr.$closing.'>';
         }, $frag);
 
         // Put back <mj-raw> blocks
@@ -173,22 +169,22 @@ class MjmlTranslateService
             ];
         }
 
-        $segments   = [];
-        $locked     = false;
-        $pairs      = 0;
-        $sawMarker  = false;
+        $segments  = [];
+        $locked    = false;
+        $pairs     = 0;
+        $sawMarker = false;
 
         foreach ($parts as $chunk) {
             if ($chunk === '') continue;
 
             if (preg_match('/^<!--\s*LOCKED_START\s*-->$/i', $chunk)) {
-                $sawMarker = true;
+                $sawMarker  = true;
                 $segments[] = ['type' => 'marker', 'text' => $chunk];
-                $locked = true;
+                $locked     = true;
                 continue;
             }
             if (preg_match('/^<!--\s*LOCKED_END\s*-->$/i', $chunk)) {
-                $sawMarker = true;
+                $sawMarker  = true;
                 $segments[] = ['type' => 'marker', 'text' => $chunk];
                 if ($locked) { $pairs++; }
                 $locked = false;
@@ -211,29 +207,22 @@ class MjmlTranslateService
 
     /**
      * Translate a plain/rich text segment with token/tag/comment shielding.
-     * Comments and tags are protected and reinstated 1:1.
+     * NOTE: placeholders use neutral prefixes to avoid translation (no real words).
      */
     public function translateRichText(string $text, string $targetLangApi, array &$samples = []): string
     {
         $original = $text;
 
-        // Shield HTML comments so DeepL never sees them (and markers remain intact if present here)
-        $map = [];
-        $text = $this->shieldPattern($text, '/<!--.*?-->/s', $map, '__CMT_%d__');
+        // Use a single opaque family of placeholders: __PH0_n__, __PH1_n__, …
+        $map  = [];
+        $text = $this->shieldPattern($text, '/<!--.*?-->/s', $map, '__PH0_%06d__');      // comments
+        $text = $this->shieldPattern($text, '/<[^>]+>/',         $map, '__PH1_%06d__');  // html tags
+        $text = $this->shieldPattern($text, '/\{\{.*?\}\}|\{%.*?%\}/s', $map, '__PH2_%06d__'); // twig
+        $text = $this->shieldPattern($text, '/\{[a-z0-9_:.%-]+(?:=[^}]+)?\}/i', $map, '__PH3_%06d__'); // tokens
 
-        // Shield HTML tags
-        $text = $this->shieldPattern($text, '/<[^>]+>/', $map, '__TAG_%d__');
-
-        // Shield Twig {{ … }} and {% … %}
-        $text = $this->shieldPattern($text, '/\{\{.*?\}\}|\{%.*?%\}/s', $map, '__TWIG_%d__');
-
-        // Shield Mautic/legacy tokens like {unsubscribe_url}, {contactfield=…}
-        $text = $this->shieldPattern($text, '/\{[a-z0-9_:.%-]+(?:=[^}]+)?\}/i', $map, '__TOK_%d__');
-
-        // Trim edges only
         $forApi = trim(html_entity_decode($text, ENT_QUOTES));
         if ($forApi === '') {
-            return $original; // nothing to translate
+            return $original;
         }
 
         $resp = $this->deepl->translate($forApi, $targetLangApi);
@@ -244,10 +233,10 @@ class MjmlTranslateService
 
         $tr = $resp['translation'] ?? $forApi;
 
-        // Unshield placeholders
+        // Unshield placeholders (longest keys first)
         $tr = $this->unshield($tr, $map);
 
-        // Re-entity (conservative)
+        // Conservative re-entity (currently a no-op by design)
         $tr = $this->reentity($tr);
 
         if ($original !== $tr) {
@@ -262,8 +251,8 @@ class MjmlTranslateService
     private function shieldPattern(string $text, string $regex, array &$map, string $tpl): string
     {
         return preg_replace_callback($regex, function ($m) use (&$map, $tpl) {
-            $key = sprintf($tpl, count($map));
-            $map[$key] = $m[0];
+            $key        = sprintf($tpl, count($map));
+            $map[$key]  = $m[0];
             return $key;
         }, $text);
     }
@@ -278,8 +267,8 @@ class MjmlTranslateService
     private function extractAndShieldMjRaw(string $mjml, array &$blocks): string
     {
         return preg_replace_callback('/<mj-raw>(.*?)<\/mj-raw>/si', function ($m) use (&$blocks) {
-            $key = '__MJRAW_' . count($blocks) . '__';
-            $blocks[$key] = $m[0];
+            $key              = '__PH4_' . str_pad((string)count($blocks), 6, '0', STR_PAD_LEFT) . '__';
+            $blocks[$key]     = $m[0]; // entire block
             return $key;
         }, $mjml);
     }
@@ -287,6 +276,8 @@ class MjmlTranslateService
     private function unshieldMjRaw(string $mjml, array $blocks): string
     {
         if (!$blocks) return $mjml;
+        // Longer keys first
+        uksort($blocks, fn($a, $b) => strlen($b) <=> strlen($a));
         return strtr($mjml, $blocks);
     }
 
