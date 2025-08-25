@@ -4,39 +4,65 @@ document.addEventListener('DOMContentLoaded', () => {
     const translateButton = document.querySelector('.btn-clone-translate');
     if (!translateButton) return;
 
-    // DeepL target languages (label shown, code sent)
-    const DEEPL_LANGS = [
-        { code: 'BG',    name: 'Bulgarian' },
-        { code: 'CS',    name: 'Czech' },
-        { code: 'DA',    name: 'Danish' },
-        { code: 'DE',    name: 'German' },
-        { code: 'EL',    name: 'Greek' },
-        { code: 'EN-GB', name: 'English (UK)' },
-        { code: 'EN-US', name: 'English (US)' },
-        { code: 'ES',    name: 'Spanish' },
-        { code: 'ET',    name: 'Estonian' },
-        { code: 'FI',    name: 'Finnish' },
-        { code: 'FR',    name: 'French' },
-        { code: 'HU',    name: 'Hungarian' },
-        { code: 'ID',    name: 'Indonesian' },
-        { code: 'IT',    name: 'Italian' },
-        { code: 'JA',    name: 'Japanese' },
-        { code: 'KO',    name: 'Korean' },
-        { code: 'LT',    name: 'Lithuanian' },
-        { code: 'LV',    name: 'Latvian' },
-        { code: 'NB',    name: 'Norwegian (Bokmål)' },
-        { code: 'NL',    name: 'Dutch' },
-        { code: 'PL',    name: 'Polish' },
-        { code: 'PT-BR', name: 'Portuguese (Brazil)' },
-        { code: 'PT-PT', name: 'Portuguese (Portugal)' },
-        { code: 'RO',    name: 'Romanian' },
-        { code: 'RU',    name: 'Russian' },
-        { code: 'SK',    name: 'Slovak' },
-        { code: 'SL',    name: 'Slovenian' },
-        { code: 'SV',    name: 'Swedish' },
-        { code: 'TR',    name: 'Turkish' },
-        { code: 'UK',    name: 'Ukrainian' },
-        { code: 'ZH',    name: 'Chinese (Simplified)' }
+    // All DeepL target languages (API codes)
+    // Note: 'EN' and 'PT' exist for backward compatibility; prefer EN-GB/EN-US and PT-BR/PT-PT.
+    // Some marked languages are next-gen text translation only (see docs).
+    const DEEPL_TARGET_LANGUAGES = [
+        { code: 'AR',      name: 'Arabic' },
+        { code: 'BG',      name: 'Bulgarian' },
+        { code: 'CS',      name: 'Czech' },
+        { code: 'DA',      name: 'Danish' },
+        { code: 'DE',      name: 'German' },
+        { code: 'EL',      name: 'Greek' },
+
+        // English
+        { code: 'EN',      name: 'English (unspecified)' }, // prefer EN-GB or EN-US
+        { code: 'EN-GB',   name: 'English (British)' },
+        { code: 'EN-US',   name: 'English (American)' },
+
+        // Spanish
+        { code: 'ES',      name: 'Spanish' },
+        { code: 'ES-419',  name: 'Spanish (Latin American)' }, // next-gen text translation only
+
+        { code: 'ET',      name: 'Estonian' },
+        { code: 'FI',      name: 'Finnish' },
+        { code: 'FR',      name: 'French' },
+
+        { code: 'HE',      name: 'Hebrew' }, // next-gen text translation only
+
+        { code: 'HU',      name: 'Hungarian' },
+        { code: 'ID',      name: 'Indonesian' },
+        { code: 'IT',      name: 'Italian' },
+        { code: 'JA',      name: 'Japanese' },
+        { code: 'KO',      name: 'Korean' },
+        { code: 'LT',      name: 'Lithuanian' },
+        { code: 'LV',      name: 'Latvian' },
+        { code: 'NB',      name: 'Norwegian Bokmål' },
+        { code: 'NL',      name: 'Dutch' },
+        { code: 'PL',      name: 'Polish' },
+
+        // Portuguese
+        { code: 'PT',      name: 'Portuguese (unspecified)' }, // prefer PT-BR or PT-PT
+        { code: 'PT-BR',   name: 'Portuguese (Brazilian)' },
+        { code: 'PT-PT',   name: 'Portuguese (European)' },
+
+        { code: 'RO',      name: 'Romanian' },
+        { code: 'RU',      name: 'Russian' },
+        { code: 'SK',      name: 'Slovak' },
+        { code: 'SL',      name: 'Slovenian' },
+        { code: 'SV',      name: 'Swedish' },
+
+        { code: 'TH',      name: 'Thai' }, // next-gen text translation only
+
+        { code: 'TR',      name: 'Turkish' },
+        { code: 'UK',      name: 'Ukrainian' },
+
+        { code: 'VI',      name: 'Vietnamese' }, // next-gen text translation only
+
+        // Chinese
+        { code: 'ZH',       name: 'Chinese (unspecified)' }, // prefer ZH-HANS or ZH-HANT
+        { code: 'ZH-HANS',  name: 'Chinese (Simplified)' },
+        { code: 'ZH-HANT',  name: 'Chinese (Traditional)' },
     ];
 
     function openLanguagePicker(defaultCode = 'DE') {

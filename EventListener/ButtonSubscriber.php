@@ -50,39 +50,49 @@ class ButtonSubscriber implements EventSubscriberInterface
   if(!id){ alert('Could not determine Email ID.'); return false; }
 
   // --- Simple language dropdown (no search), default 'DE' ---
-  var DEEPL_LANGS = [
-    { code: 'BG',    name: 'Bulgarian' },
-    { code: 'CS',    name: 'Czech' },
-    { code: 'DA',    name: 'Danish' },
-    { code: 'DE',    name: 'German' },
-    { code: 'EL',    name: 'Greek' },
-    { code: 'EN-GB', name: 'English (UK)' },
-    { code: 'EN-US', name: 'English (US)' },
-    { code: 'ES',    name: 'Spanish' },
-    { code: 'ET',    name: 'Estonian' },
-    { code: 'FI',    name: 'Finnish' },
-    { code: 'FR',    name: 'French' },
-    { code: 'HU',    name: 'Hungarian' },
-    { code: 'ID',    name: 'Indonesian' },
-    { code: 'IT',    name: 'Italian' },
-    { code: 'JA',    name: 'Japanese' },
-    { code: 'KO',    name: 'Korean' },
-    { code: 'LT',    name: 'Lithuanian' },
-    { code: 'LV',    name: 'Latvian' },
-    { code: 'NB',    name: 'Norwegian (Bokmål)' },
-    { code: 'NL',    name: 'Dutch' },
-    { code: 'PL',    name: 'Polish' },
-    { code: 'PT-BR', name: 'Portuguese (Brazil)' },
-    { code: 'PT-PT', name: 'Portuguese (Portugal)' },
-    { code: 'RO',    name: 'Romanian' },
-    { code: 'RU',    name: 'Russian' },
-    { code: 'SK',    name: 'Slovak' },
-    { code: 'SL',    name: 'Slovenian' },
-    { code: 'SV',    name: 'Swedish' },
-    { code: 'TR',    name: 'Turkish' },
-    { code: 'UK',    name: 'Ukrainian' },
-    { code: 'ZH',    name: 'Chinese (Simplified)' }
-  ];
+    var DEEPL_LANGS = [
+      { code: 'AR',     name: 'Arabic' },
+      { code: 'BG',     name: 'Bulgarian' },
+      { code: 'CS',     name: 'Czech' },
+      { code: 'DA',     name: 'Danish' },
+      { code: 'DE',     name: 'German' },
+      { code: 'EL',     name: 'Greek' },
+      { code: 'EN',     name: 'English' }, // Unspecified variant (back-compat)
+      { code: 'EN-GB',  name: 'English (UK)' },
+      { code: 'EN-US',  name: 'English (US)' },
+      { code: 'ES',     name: 'Spanish' },
+      { code: 'ES-419', name: 'Spanish (Latin American)' }, // next-gen text translation
+      { code: 'ET',     name: 'Estonian' },
+      { code: 'FI',     name: 'Finnish' },
+      { code: 'FR',     name: 'French' },
+      { code: 'HE',     name: 'Hebrew' }, // next-gen text translation
+      { code: 'HU',     name: 'Hungarian' },
+      { code: 'ID',     name: 'Indonesian' },
+      { code: 'IT',     name: 'Italian' },
+      { code: 'JA',     name: 'Japanese' },
+      { code: 'KO',     name: 'Korean' },
+      { code: 'LT',     name: 'Lithuanian' },
+      { code: 'LV',     name: 'Latvian' },
+      { code: 'NB',     name: 'Norwegian (Bokmål)' },
+      { code: 'NL',     name: 'Dutch' },
+      { code: 'PL',     name: 'Polish' },
+      { code: 'PT',     name: 'Portuguese' }, // Unspecified variant (back-compat)
+      { code: 'PT-BR',  name: 'Portuguese (Brazil)' },
+      { code: 'PT-PT',  name: 'Portuguese (Portugal)' },
+      { code: 'RO',     name: 'Romanian' },
+      { code: 'RU',     name: 'Russian' },
+      { code: 'SK',     name: 'Slovak' },
+      { code: 'SL',     name: 'Slovenian' },
+      { code: 'SV',     name: 'Swedish' },
+      { code: 'TH',     name: 'Thai' }, // next-gen text translation
+      { code: 'TR',     name: 'Turkish' },
+      { code: 'UK',     name: 'Ukrainian' },
+      { code: 'VI',     name: 'Vietnamese' }, // next-gen text translation
+      { code: 'ZH',     name: 'Chinese' }, // Unspecified variant (back-compat)
+      { code: 'ZH-HANS',name: 'Chinese (Simplified)' },
+      { code: 'ZH-HANT',name: 'Chinese (Traditional)' }
+    ];
+
 
   function openLanguagePicker(defaultCode){
     return new Promise(function(resolve){
