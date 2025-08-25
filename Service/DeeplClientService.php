@@ -22,14 +22,15 @@ class DeeplClientService
     /**
      * Plain-text translation (no HTML handling).
      * $params can include DeepL options like formality, etc.
+     *
+     * @return array{success:bool, translation?:string, error?:string, host?:string, status?:int|null}
      */
     public function translate(string $text, string $targetLang = 'DE', array $params = []): array
     {
         $payload = array_merge([
-            'text'              => $text,
-            'target_lang'       => strtoupper($targetLang),
-            // keep formatting when possible
-            'preserve_formatting' => 1,
+            'text'                 => $text,
+            'target_lang'          => strtoupper($targetLang),
+            'preserve_formatting'  => 1,
         ], $params);
 
         return $this->requestWithHostFailover($payload);
@@ -37,18 +38,17 @@ class DeeplClientService
 
     /**
      * HTML-aware translation (DeepL tag_handling=html).
-     * We do not pre/post "shield" HTML – we let DeepL handle markup.
+     *
+     * @return array{success:bool, translation?:string, error?:string, host?:string, status?:int|null}
      */
     public function translateHtml(string $html, string $targetLang = 'DE', array $params = []): array
     {
         $payload = array_merge([
-            'text'                => $html,
-            'target_lang'         => strtoupper($targetLang),
-            'tag_handling'        => 'html',
-            // DeepL defaults to nonewlines with tag_handling=html in next-gen; set explicitly for clarity
-            'split_sentences'     => 'nonewlines',
-            // Helps keep whitespace/line-breaks intact where possible
-            'preserve_formatting' => 1,
+            'text'                 => $html,
+            'target_lang'          => strtoupper($targetLang),
+            'tag_handling'         => 'html',
+            'split_sentences'      => 'nonewlines',
+            'preserve_formatting'  => 1,
         ], $params);
 
         return $this->requestWithHostFailover($payload);
@@ -56,6 +56,8 @@ class DeeplClientService
 
     /**
      * Detect plan by key and try free/pro host accordingly with 403 fallback.
+     *
+     * @return array{success:bool, translation?:string, error?:string, host?:string, status?:int|null}
      */
     private function requestWithHostFailover(array $payload): array
     {
@@ -67,10 +69,8 @@ class DeeplClientService
             return [
                 'success' => false,
                 'error'   => 'API key not set',
-
                 'host'    => null,
                 'status'  => null,
-                'body'    => null,
             ];
         }
 
@@ -93,16 +93,17 @@ class DeeplClientService
             'firstHost' => $firstHost,
             'altHost'   => $altHost,
             'status'    => $first['status'] ?? null,
-            'body'      => $first['body'] ?? null,
         ]);
 
         $second = $this->callDeepL($altHost, $apiKey, $payload);
-        return $second['success'] ? $second : $second;
+        return $second;
     }
 
     /**
      * Low-level HTTP request.
      * $payload is the full DeepL form body (we add auth_key here).
+     *
+     * @return array{success:bool, translation?:string, error?:string, host?:string, status?:int|null}
      */
     private function callDeepL(string $host, string $apiKey, array $payload): array
     {
@@ -132,15 +133,12 @@ class DeeplClientService
             return [
                 'success' => false,
                 'error'   => 'cURL error #'.$errno.': '.$error,
-                'apiKey'  => $apiKey,
                 'host'    => $host,
                 'status'  => null,
-                'body'    => null,
             ];
         }
 
-        $rawBody = $response;
-        $json    = json_decode($response, true);
+        $json = json_decode($response, true);
 
         if ($httpCode !== 200) {
             $msg = is_array($json) && isset($json['message'])
@@ -150,10 +148,8 @@ class DeeplClientService
             return [
                 'success' => false,
                 'error'   => $msg,
-                'apiKey'  => $apiKey,
                 'host'    => $host,
                 'status'  => $httpCode,
-                'body'    => $rawBody,
             ];
         }
 
@@ -162,22 +158,16 @@ class DeeplClientService
             return [
                 'success' => false,
                 'error'   => 'Unexpected API response (no translations[0].text)',
-                'apiKey'  => $apiKey,
                 'host'    => $host,
                 'status'  => $httpCode,
-                'body'    => $rawBody,
-                'raw'     => $json,
             ];
         }
 
         return [
             'success'     => true,
             'translation' => $translation,
-            'apiKey'      => $apiKey,
             'host'        => $host,
             'status'      => $httpCode,
-            'body'        => $rawBody,
-            'raw'         => $json,
         ];
     }
 

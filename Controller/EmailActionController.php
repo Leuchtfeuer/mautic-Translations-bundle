@@ -61,20 +61,28 @@ class EmailActionController extends FormController
         $emailName       = $sourceEmail->getName() ?: '';
         $isCodeMode      = $sourceEmail->getTemplate() === 'mautic_code_mode';
 
-        // 1) Quick probe
+        // 1) Quick probe (do not leak probe details to client)
         $probe = $deepl->translate('Hello from Mautic', $targetLangApi);
         if (!($probe['success'] ?? false)) {
+            $logger->error('[AiTranslate] DeepL probe failed', [
+                'error'  => $probe['error']  ?? 'unknown',
+                'host'   => $probe['host']   ?? null,
+                'status' => $probe['status'] ?? null,
+            ]);
+
             return new JsonResponse([
                 'success' => false,
-                'message' => 'Probe failed: '.($probe['error'] ?? 'Unknown error'),
-                'deeplProbe' => $probe,
+                'message' => 'DeepL probe failed. Check API key/plan and network.',
             ], Response::HTTP_BAD_REQUEST);
         }
 
         // 2) Read MJML from builder table
         $mjml = '';
         try {
-            $row  = $conn->fetchAssociative('SELECT custom_mjml FROM bundle_grapesjsbuilder WHERE email_id = :id LIMIT 1', ['id' => $sourceEmail->getId()]);
+            $row  = $conn->fetchAssociative(
+                'SELECT custom_mjml FROM bundle_grapesjsbuilder WHERE email_id = :id LIMIT 1',
+                ['id' => $sourceEmail->getId()]
+            );
             $mjml = isset($row['custom_mjml']) ? (string) $row['custom_mjml'] : '';
         } catch (\Throwable $e) {
             $logger->error('[AiTranslate] Failed to fetch MJML from bundle_grapesjsbuilder', [
@@ -138,6 +146,7 @@ class EmailActionController extends FormController
         $translatedSubject = null;
         $translatedMjml    = null;
         $samples           = [];
+        $mj                = []; // ensure defined
 
         try {
             // Subject
@@ -212,13 +221,7 @@ class EmailActionController extends FormController
                 'lockedMode'     => $lockedMode,
                 'lockedPairs'    => $lockedPairs,
             ],
-            'deeplProbe' => [
-                'success'     => (bool) ($probe['success'] ?? false),
-                'translation' => $probe['translation'] ?? null,
-                'error'       => $probe['error'] ?? null,
-                'host'        => $probe['host'] ?? null,
-                'status'      => $probe['status'] ?? null,
-            ],
+            // NOTE: removed 'deeplProbe' block from client response to avoid leaking details
             'note' => 'custom_html is now compiled from the translated MJML so preview reflects the translation immediately.',
         ];
 
