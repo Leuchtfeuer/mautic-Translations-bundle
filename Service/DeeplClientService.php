@@ -1,6 +1,6 @@
 <?php
 
-namespace MauticPlugin\AiTranslateBundle\Service;
+namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Service;
 
 use Mautic\PluginBundle\Helper\IntegrationHelper;
 use Psr\Log\LoggerInterface;
@@ -61,7 +61,7 @@ class DeeplClientService
      */
     private function requestWithHostFailover(array $payload): array
     {
-        $integration = $this->integrationHelper->getIntegrationObject('AiTranslate');
+        $integration = $this->integrationHelper->getIntegrationObject('LeuchtfeuerTranslations');
         $keys        = $integration ? $integration->getDecryptedApiKeys() : [];
         $apiKey      = $keys['deepl_api_key'] ?? '';
 
@@ -78,7 +78,7 @@ class DeeplClientService
         $firstHost = $guessFree ? $this->apiUrlFree : $this->apiUrlPro;
         $altHost   = $guessFree ? $this->apiUrlPro  : $this->apiUrlFree;
 
-        $this->log('[AiTranslate][DeepL] plan guess', [
+        $this->log('[LeuchtfeuerTranslations][DeepL] plan guess', [
             'guess'     => $guessFree ? 'free' : 'pro',
             'firstHost' => $firstHost,
             'altHost'   => $altHost,
@@ -89,7 +89,7 @@ class DeeplClientService
             return $first;
         }
 
-        $this->log('[AiTranslate][DeepL] 403 on first host, trying fallback', [
+        $this->log('[LeuchtfeuerTranslations][DeepL] 403 on first host, trying fallback', [
             'firstHost' => $firstHost,
             'altHost'   => $altHost,
             'status'    => $first['status'] ?? null,
@@ -124,7 +124,7 @@ class DeeplClientService
         curl_close($ch);
 
         if ($response === false) {
-            $this->log('[AiTranslate][DeepL] cURL error', [
+            $this->log('[LeuchtfeuerTranslations][DeepL] cURL error', [
                 'host'  => $host,
                 'errno' => $errno,
                 'error' => $error,

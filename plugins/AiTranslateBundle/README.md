@@ -1,1 +1,0 @@
-# mautic-AiTranslate-bundle

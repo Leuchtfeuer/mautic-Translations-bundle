@@ -1,12 +1,12 @@
 <?php
 
-namespace MauticPlugin\AiTranslateBundle\Integration;
+namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Integration;
 
 use Mautic\PluginBundle\Integration\AbstractIntegration;
 
-class AiTranslateIntegration extends AbstractIntegration
+class LeuchtfeuerTranslationsIntegration extends AbstractIntegration
 {
-    public const NAME = 'AiTranslate'; // machine name
+    public const NAME = 'LeuchtfeuerTranslations'; // machine name
 
     public function getName(): string
     {
@@ -16,7 +16,7 @@ class AiTranslateIntegration extends AbstractIntegration
     public function getRequiredKeyFields(): array
     {
         return [
-            'deepl_api_key' => 'plugin.aitranslate.deepl_api_key',
+            'deepl_api_key' => 'plugin.leuchtfeuertranslations.deepl_api_key',
         ];
     }
 
@@ -24,17 +24,17 @@ class AiTranslateIntegration extends AbstractIntegration
 
     public function getDisplayName(): string
     {
-        return 'AI Translate';
+        return 'Translations by Leuchtfeuer';
     }
 
     public function getIcon(): string
     {
-        return 'plugins/AiTranslateBundle/Assets/img/icon.png';
+        return 'plugins/LeuchtfeuerTranslationsBundle/Assets/img/icon.png';
     }
 
     public function getAuthenticationType(): string
     {
-        return 'none';
+        return 'keys';
     }
 
     public function isConfigured(): bool

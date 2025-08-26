@@ -13,27 +13,27 @@ return function (ContainerConfigurator $configurator): void {
         ->public();
 
     // Autoload everything under the bundle (except Mautic's default excludes)
-    $services->load('MauticPlugin\\AiTranslateBundle\\', '../')
+    $services->load('MauticPlugin\\LeuchtfeuerTranslationsBundle\\', '../')
         ->exclude('../{'.implode(',', MauticCoreExtension::DEFAULT_EXCLUDES).'}');
 
     // --- Integration (so it shows on /s/plugins) ---
-    // Make sure Integration\AiTranslateIntegration::getName() returns 'AiTranslate'
-    $services->set(MauticPlugin\AiTranslateBundle\Integration\AiTranslateIntegration::class)
+    // Make sure Integration\LeuchtfeuerTranslationsIntegration::getName() returns 'LeuchtfeuerTranslations'
+    $services->set(MauticPlugin\LeuchtfeuerTranslationsBundle\Integration\LeuchtfeuerTranslationsIntegration::class)
         ->parent('mautic.integration.abstract')
-        ->tag('mautic.integration', ['integration' => 'AiTranslate'])
+        ->tag('mautic.integration', ['integration' => 'LeuchtfeuerTranslations'])
         ->tag('mautic.config_integration');
 
     // DeepL client with IntegrationHelper + logger
-    $services->set(MauticPlugin\AiTranslateBundle\Service\DeeplClientService::class)
+    $services->set(MauticPlugin\LeuchtfeuerTranslationsBundle\Service\DeeplClientService::class)
         ->arg('$integrationHelper', service('mautic.helper.integration'))
         ->arg('$logger', service('monolog.logger.mautic'));
 
     // MJML translation orchestrator (uses DeeplClientService + logger)
-    $services->set(MauticPlugin\AiTranslateBundle\Service\MjmlTranslateService::class)
-        ->arg('$deepl', service(MauticPlugin\AiTranslateBundle\Service\DeeplClientService::class))
+    $services->set(MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlTranslateService::class)
+        ->arg('$deepl', service(MauticPlugin\LeuchtfeuerTranslationsBundle\Service\DeeplClientService::class))
         ->arg('$logger', service('monolog.logger.mautic'));
 
     // MJML compiler
-    $services->set(MauticPlugin\AiTranslateBundle\Service\MjmlCompileService::class)
+    $services->set(MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlCompileService::class)
         ->arg('$logger', service('monolog.logger.mautic'));
 };

@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 btn.disabled = false;
             })
             .catch(e => {
-                console.error('AiTranslate test-api error:', e);
+                console.error('LeuchtfeuerTranslations test-api error:', e);
                 result.innerText = 'Request failed';
                 btn.disabled = false;
             });

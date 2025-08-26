@@ -1,6 +1,6 @@
 <?php
 
-namespace MauticPlugin\AiTranslateBundle\Service;
+namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Service;
 
 use Psr\Log\LoggerInterface;
 
@@ -28,7 +28,7 @@ class MjmlCompileService
             if ($r['success']) {
                 return $r;
             }
-            $this->log('[AiTranslate][MJML] CLI compile failed, falling back', ['error' => $r['error'] ?? 'unknown']);
+            $this->log('[LeuchtfeuerTranslations][MJML] CLI compile failed, falling back', ['error' => $r['error'] ?? 'unknown']);
         }
 
         // B) Fallback: minimal tag mapping so preview shows translated text
@@ -67,7 +67,7 @@ class MjmlCompileService
         file_put_contents($in, $mjml);
 
         $cmd = escapeshellcmd($cli) . ' ' . escapeshellarg($in) . ' -o ' . escapeshellarg($out) . ' 2>&1';
-        $this->log('[AiTranslate][MJML] invoking CLI', ['cmd' => $cmd]);
+        $this->log('[LeuchtfeuerTranslations][MJML] invoking CLI', ['cmd' => $cmd]);
 
         $output = @shell_exec($cmd);
         $ok     = is_file($out) && filesize($out) > 0;

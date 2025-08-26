@@ -1,4 +1,4 @@
-// plugins/AiTranslateBundle/Resources/assets/js/email_action.js
+// plugins/LeuchtfeuerTranslationsBundle/Resources/assets/js/email_action.js
 
 document.addEventListener('DOMContentLoaded', () => {
     const translateButton = document.querySelector('.btn-clone-translate');
@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const select = document.createElement('select');
             select.style.width = '100%';
             select.style.margin = '8px 0';
-            DEEPL_LANGS.forEach(l => {
+            DEEPL_TARGET_LANGUAGES.forEach(l => {
                 const opt = document.createElement('option');
                 opt.value = l.code;
                 opt.textContent = `${l.name} (${l.code})`;

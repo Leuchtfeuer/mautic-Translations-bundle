@@ -1,15 +1,15 @@
 <?php
-// plugins/AiTranslateBundle/Controller/EmailActionController.php
+// plugins/LeuchtfeuerTranslationsBundle/Controller/EmailActionController.php
 
-namespace MauticPlugin\AiTranslateBundle\Controller;
+namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Controller;
 
 use Doctrine\DBAL\Connection;
 use Mautic\CoreBundle\Controller\FormController;
 use Mautic\CoreBundle\Security\Permissions\CorePermissions;
 use Mautic\EmailBundle\Entity\Email;
-use MauticPlugin\AiTranslateBundle\Service\DeeplClientService;
-use MauticPlugin\AiTranslateBundle\Service\MjmlTranslateService;
-use MauticPlugin\AiTranslateBundle\Service\MjmlCompileService;
+use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\DeeplClientService;
+use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlTranslateService;
+use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlCompileService;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -27,7 +27,7 @@ class EmailActionController extends FormController
         CorePermissions $security,
         Connection $conn
     ): Response {
-        $logger->info('[AiTranslate] translateAction start', [
+        $logger->info('[LeuchtfeuerTranslations] translateAction start', [
             'objectId'   => $objectId,
             'targetLang' => $request->get('targetLang'),
         ]);
@@ -46,7 +46,7 @@ class EmailActionController extends FormController
                 $sourceEmail->getCreatedBy()
             )
         ) {
-            $logger->warning('[AiTranslate] email not found or access denied', ['objectId' => $objectId]);
+            $logger->warning('[LeuchtfeuerTranslations] email not found or access denied', ['objectId' => $objectId]);
             return new JsonResponse(['success' => false, 'message' => 'Email not found or access denied.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -64,7 +64,7 @@ class EmailActionController extends FormController
         // 1) Quick probe (do not leak probe details to client)
         $probe = $deepl->translate('Hello from Mautic', $targetLangApi);
         if (!($probe['success'] ?? false)) {
-            $logger->error('[AiTranslate] DeepL probe failed', [
+            $logger->error('[LeuchtfeuerTranslations] DeepL probe failed', [
                 'error'  => $probe['error']  ?? 'unknown',
                 'host'   => $probe['host']   ?? null,
                 'status' => $probe['status'] ?? null,
@@ -85,7 +85,7 @@ class EmailActionController extends FormController
             );
             $mjml = isset($row['custom_mjml']) ? (string) $row['custom_mjml'] : '';
         } catch (\Throwable $e) {
-            $logger->error('[AiTranslate] Failed to fetch MJML from bundle_grapesjsbuilder', [
+            $logger->error('[LeuchtfeuerTranslations] Failed to fetch MJML from bundle_grapesjsbuilder', [
                 'emailId' => $sourceEmail->getId(),
                 'ex'      => $e->getMessage(),
             ]);
@@ -119,7 +119,7 @@ class EmailActionController extends FormController
             // Persist clone to get its ID
             $model->saveEntity($clone);
         } catch (\Throwable $e) {
-            $logger->error('[AiTranslate] Clone (entity __clone) failed', ['ex' => $e->getMessage()]);
+            $logger->error('[LeuchtfeuerTranslations] Clone (entity __clone) failed', ['ex' => $e->getMessage()]);
             return new JsonResponse([
                 'success' => false,
                 'message' => 'Failed to clone email: '.$e->getMessage(),
@@ -138,7 +138,7 @@ class EmailActionController extends FormController
                 }
                 $wroteMjml = true;
             } catch (\Throwable $e) {
-                $logger->error('[AiTranslate] Failed initial MJML write for clone', ['cloneId' => $cloneId, 'ex' => $e->getMessage()]);
+                $logger->error('[LeuchtfeuerTranslations] Failed initial MJML write for clone', ['cloneId' => $cloneId, 'ex' => $e->getMessage()]);
             }
         }
 
@@ -174,7 +174,7 @@ class EmailActionController extends FormController
                 if (($compiled['success'] ?? false) && !empty($compiled['html'])) {
                     $clone->setCustomHtml($compiled['html']);
                 } else {
-                    $logger->warning('[AiTranslate] MJML compile failed; keeping existing custom_html', [
+                    $logger->warning('[LeuchtfeuerTranslations] MJML compile failed; keeping existing custom_html', [
                         'cloneId' => $cloneId,
                         'error'   => $compiled['error'] ?? 'unknown',
                     ]);
@@ -184,7 +184,7 @@ class EmailActionController extends FormController
             // Save updated entity LAST so custom_html is persisted after translation
             $model->saveEntity($clone);
         } catch (\Throwable $e) {
-            $logger->error('[AiTranslate] Translation / compile step failed', ['cloneId' => $cloneId, 'ex' => $e->getMessage()]);
+            $logger->error('[LeuchtfeuerTranslations] Translation / compile step failed', ['cloneId' => $cloneId, 'ex' => $e->getMessage()]);
         }
 
         // 6) Done
@@ -225,7 +225,7 @@ class EmailActionController extends FormController
             'note' => 'custom_html is now compiled from the translated MJML so preview reflects the translation immediately.',
         ];
 
-        $logger->info('[AiTranslate] translateAction finished', [
+        $logger->info('[LeuchtfeuerTranslations] translateAction finished', [
             'cloneId'  => $cloneId,
             'changed'  => $payload['translation'],
         ]);

@@ -1,10 +1,10 @@
 <?php
 
-namespace MauticPlugin\AiTranslateBundle\Controller;
+namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Controller;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use MauticPlugin\AiTranslateBundle\Service\DeeplClientService;
+use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\DeeplClientService;
 
 class ApiTestController extends AbstractController
 {

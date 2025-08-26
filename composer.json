@@ -1,0 +1,18 @@
+{
+  "name": "leuchtfeuer/mautic-translations-bundle",
+  "description": "AI-based translation of Mautic content e.g. emails",
+  "type": "mautic-plugin",
+  "license": "GPL-3.0",
+  "authors": [
+    {
+      "name": "Leuchtfeuer Digital Marketing GmbH",
+      "email": "mautic-plugins@Leuchtfeuer.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "MauticPlugin\\LeuchtfeuerTranslationsBundle\\": ""
+    }
+  },
+  "require": {}
+}

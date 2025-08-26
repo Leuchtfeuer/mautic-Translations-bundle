@@ -1,6 +1,6 @@
 <?php
 
-namespace MauticPlugin\AiTranslateBundle\Service;
+namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Service;
 
 use Psr\Log\LoggerInterface;
 
@@ -28,7 +28,7 @@ class MjmlTranslateService
             $out     = $this->translateMjmlSegmentCore($mjml, $targetLangApi, $samples);
             $changed = ($out !== $original);
 
-            $this->log('[AiTranslate][MJML] translateMjml done (no markers)', [
+            $this->log('[LeuchtfeuerTranslations][MJML] translateMjml done (no markers)', [
                 'changed' => $changed,
                 'samples' => array_slice($samples, 0, 2),
             ]);
@@ -63,7 +63,7 @@ class MjmlTranslateService
 
         $changed = ($rebuilt !== $original);
 
-        $this->log('[AiTranslate][MJML] translateMjml done (with markers)', [
+        $this->log('[LeuchtfeuerTranslations][MJML] translateMjml done (with markers)', [
             'changed'    => $changed,
             'pairs'      => $segments['pairs'],
             'unbalanced' => $segments['unbalanced'],
@@ -147,7 +147,7 @@ class MjmlTranslateService
         $orig = $html;
         $resp = $this->deepl->translateHtml($html, $targetLangApi);
         if (!($resp['success'] ?? false)) {
-            $this->log('[AiTranslate][MJML] translateInnerHtml failed', ['error' => $resp['error'] ?? 'unknown']);
+            $this->log('[LeuchtfeuerTranslations][MJML] translateInnerHtml failed', ['error' => $resp['error'] ?? 'unknown']);
             return $orig;
         }
         $translated = (string) ($resp['translation'] ?? $orig);
@@ -165,7 +165,7 @@ class MjmlTranslateService
         $orig = $text;
         $resp = $this->deepl->translate($text, $targetLangApi);
         if (!($resp['success'] ?? false)) {
-            $this->log('[AiTranslate][MJML] translateRichText failed', ['error' => $resp['error'] ?? 'unknown']);
+            $this->log('[LeuchtfeuerTranslations][MJML] translateRichText failed', ['error' => $resp['error'] ?? 'unknown']);
             return $orig;
         }
         $translated = (string) ($resp['translation'] ?? $orig);

@@ -1,5 +1,5 @@
 <?php
-namespace MauticPlugin\AiTranslateBundle\EventListener;
+namespace MauticPlugin\LeuchtfeuerTranslationsBundle\EventListener;
 
 use Mautic\CoreBundle\CoreEvents;
 use Mautic\CoreBundle\Event\CustomButtonEvent;
@@ -30,7 +30,7 @@ class ButtonSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $this->logger->info('[AiTranslate] injecting dropdown item', ['location' => $loc]);
+        $this->logger->info('[LeuchtfeuerTranslations] injecting dropdown item', ['location' => $loc]);
 
         $dropdownItem = [
             'attr'      => [
@@ -216,7 +216,7 @@ class ButtonSubscriber implements EventSubscriberInterface
         }
     })
     .catch(function(err){
-        console.error('AiTranslate error:', err);
+        console.error('LeuchtfeuerTranslations error:', err);
         alert('Unexpected error, check console.');
     })
     .finally(function(){
@@ -241,6 +241,6 @@ JS
         // Pass the explicit location name
         $event->addButton($dropdownItem, 'page_actions', $routeFilter);
 
-        $this->logger->info('[AiTranslate] dropdown item added', ['location' => $loc]);
+        $this->logger->info('[LeuchtfeuerTranslations] dropdown item added', ['location' => $loc]);
     }
 }
