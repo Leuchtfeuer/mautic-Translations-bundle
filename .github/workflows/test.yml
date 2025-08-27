@@ -16,20 +16,20 @@ jobs:
       
       - name: Checkout this plugin
         uses: actions/checkout@v4
-        with:
-          path: ${{ env.PLUGIN_DIR }}
 
       - name: Setup PHP, with composer and extensions
         uses: shivammathur/setup-php@v2
         with:
-          php-version: ${{ matrix.php-versions }}
+          php-version: 8.3
           ini-values: -dpcov.enabled=0, pcov.directory=."
           extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite, mysql, pdo_mysql
           coverage: pcov
+          
       - name: Install Composer dependencies
         run: composer install
+        
       - name: Run Code Style check
-        run: bin/php-cs-fixer fix ${{ env.PLUGIN_DIR }} --config=.php-cs-fixer.php -v --dry-run --show-progress=dots --diff
+        run: ./vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php -v --dry-run --show-progress=dots --diff
 
       - name: PHPSTAN
-        run: composer phpstan -- ${{ env.PLUGIN_DIR }}
+        run: ./vendor/bin/phpstan --no-progress
