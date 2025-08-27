@@ -1,0 +1,33 @@
+name: Mautic Plugin tests
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'feature/*'
+  pull_request:
+
+jobs:
+  phpunit:
+    runs-on: ubuntu-latest
+    name: run cs and phpstan
+
+    steps:
+      
+      - name: Checkout this plugin
+        uses: actions/checkout@v4
+        with:
+          path: ${{ env.PLUGIN_DIR }}
+
+      - name: Setup PHP, with composer and extensions
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-versions }}
+          ini-values: -dpcov.enabled=0, pcov.directory=."
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite, mysql, pdo_mysql
+          coverage: pcov
+      - name: Run Code Style check
+        run: bin/php-cs-fixer fix ${{ env.PLUGIN_DIR }} --config=.php-cs-fixer.php -v --dry-run --show-progress=dots --diff
+
+      - name: PHPSTAN
+        run: composer phpstan -- ${{ env.PLUGIN_DIR }}
