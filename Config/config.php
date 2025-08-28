@@ -1,6 +1,5 @@
 <?php
 
-
 return [
     'name'        => 'Translations by Leuchtfeuer',
     'description' => 'AI-based translation of Mautic content e.g. emails',
