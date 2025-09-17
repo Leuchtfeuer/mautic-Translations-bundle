@@ -5,14 +5,12 @@ declare(strict_types=1);
 use Mautic\CoreBundle\DependencyInjection\MauticCoreExtension;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
-use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
-
 return function (ContainerConfigurator $configurator): void {
     $services = $configurator->services()
         ->defaults()
         ->autowire()
         ->autoconfigure();
-    // NOTE: do NOT call ->public() here – keep services private by default
+    // Keep services private by default (no ->public())
 
     // Autoload everything under the bundle (except Mautic's default excludes)
     $services->load('MauticPlugin\\LeuchtfeuerTranslationsBundle\\', '../')
@@ -28,17 +26,8 @@ return function (ContainerConfigurator $configurator): void {
         MauticPlugin\LeuchtfeuerTranslationsBundle\Integration\LeuchtfeuerTranslationsIntegration::class
     )->public();
 
-    // DeepL client with IntegrationHelper + logger (kept private)
-    $services->set(MauticPlugin\LeuchtfeuerTranslationsBundle\Service\DeeplClientService::class)
-        ->arg('$integrationHelper', service('mautic.helper.integration'))
-        ->arg('$logger', service('monolog.logger.mautic'));
-
-    // MJML translation orchestrator (uses DeeplClientService + logger)
-    $services->set(MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlTranslateService::class)
-        ->arg('$deepl', service(MauticPlugin\LeuchtfeuerTranslationsBundle\Service\DeeplClientService::class))
-        ->arg('$logger', service('monolog.logger.mautic'));
-
-    // MJML compiler
-    $services->set(MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlCompileService::class)
-        ->arg('$logger', service('monolog.logger.mautic'));
+    // Rely on autowiring for constructor deps (IntegrationHelper, LoggerInterface, etc.)
+    $services->set(MauticPlugin\LeuchtfeuerTranslationsBundle\Service\DeeplClientService::class);
+    $services->set(MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlTranslateService::class);
+    $services->set(MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlCompileService::class);
 };
