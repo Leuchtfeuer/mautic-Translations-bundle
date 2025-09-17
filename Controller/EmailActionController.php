@@ -7,6 +7,8 @@ use Mautic\CoreBundle\Controller\FormController;
 use Mautic\CoreBundle\Security\Permissions\CorePermissions;
 use Mautic\EmailBundle\Entity\Email;
 use Mautic\EmailBundle\Model\EmailModel;
+use MauticPlugin\GrapesJsBuilderBundle\Entity\GrapesJsBuilder;
+use MauticPlugin\GrapesJsBuilderBundle\Model\GrapesJsBuilderModel;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\DeeplClientService;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlCompileService;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlTranslateService;
@@ -14,6 +16,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class EmailActionController extends FormController
 {
@@ -91,22 +94,15 @@ class EmailActionController extends FormController
             ], Response::HTTP_BAD_REQUEST);
         }
 
+        // Prepare GrapesJs model once; reuse
+        /** @var GrapesJsBuilderModel $grapesModel */
+        $grapesModel = $this->getModel(GrapesJsBuilderModel::class);
 
-
-        // 2) Read MJML using GrapesJsBuilderModel (avoid raw SQL / missing table prefix)
+// 2) Read MJML using GrapesJsBuilderModel (avoid raw SQL / missing table prefix)
         $mjml = '';
         try {
-            /** @var \MauticPlugin\GrapesJsBuilderBundle\Model\GrapesJsBuilderModel $grapesModel */
-            $grapesModel = $this->getModel(\MauticPlugin\GrapesJsBuilderBundle\Model\GrapesJsBuilderModel::class);
-
             $grapes = $grapesModel->getGrapesJsFromEmailId((int) $sourceEmail->getId());
-            if (is_array($grapes) && isset($grapes['custom_mjml'])) {
-                $mjml = (string) $grapes['custom_mjml'];
-            } elseif (is_object($grapes) && method_exists($grapes, 'getCustomMjml')) {
-                $mjml = (string) $grapes->getCustomMjml();
-            } elseif (is_string($grapes)) {
-                $mjml = $grapes;
-            }
+            $mjml   = $grapes?->getCustomMjml() ?? '';
         } catch (\Throwable $e) {
             $logger->error('[LeuchtfeuerTranslations] Failed to fetch MJML via GrapesJsBuilderModel', [
                 'emailId' => $sourceEmail->getId(),
@@ -163,21 +159,32 @@ class EmailActionController extends FormController
         }
 
 
-        // 4) If we had MJML, write it to the clone first…
+// 4) If we had MJML, write it to the clone via entity/repository (no raw SQL)
         $wroteMjml = false;
-        if ('' !== $mjml) {
+        if ($mjml !== '') {
             try {
-                $affected = $conn->update('bundle_grapesjsbuilder', ['custom_mjml' => $mjml], ['email_id' => $cloneId]);
-                if (0 === $affected) {
-                    $conn->insert('bundle_grapesjsbuilder', ['email_id' => $cloneId, 'custom_mjml' => $mjml]);
+                /** @var GrapesJsBuilder|null $cloneGrapes */
+                $cloneGrapes = $grapesModel->getGrapesJsFromEmailId($cloneId);
+                if ($cloneGrapes === null) {
+                    $cloneGrapes = new GrapesJsBuilder();
+                    $cloneGrapes->setEmail($clone);
+                }
+
+                if ($cloneGrapes->getCustomMjml() !== $mjml) {
+                    $cloneGrapes->setCustomMjml($mjml);
+                    $grapesModel->getRepository()->saveEntity($cloneGrapes);
                 }
                 $wroteMjml = true;
             } catch (\Throwable $e) {
-                $logger->error('[LeuchtfeuerTranslations] Failed initial MJML write for clone', ['cloneId' => $cloneId, 'ex' => $e->getMessage()]);
+                $logger->error('[LeuchtfeuerTranslations] Failed initial MJML write for clone (entity/repository)', [
+                    'cloneId' => $cloneId,
+                    'ex'      => $e->getMessage(),
+                ]);
             }
         }
 
-        // 5) Translate subject + MJML (if present) and set custom_html to compiled HTML
+
+// 5) Translate subject + MJML (if present) and set custom_html to compiled HTML
         $translatedSubject = null;
         $translatedMjml    = null;
         $samples           = [];
@@ -186,28 +193,36 @@ class EmailActionController extends FormController
         try {
             // Subject
             $origSubject = (string) $clone->getSubject();
-            if ('' !== $origSubject) {
+            if ($origSubject !== '') {
                 $translatedSubject = $mjmlService->translateRichText($origSubject, $targetLangApi, $samples);
                 if ($translatedSubject !== $origSubject) {
                     $clone->setSubject($translatedSubject);
                 }
             }
 
-            // MJML
-            if ('' !== $mjml) {
+// MJML
+            if ($mjml !== '') {
                 $mj             = $mjmlService->translateMjml($mjml, $targetLangApi);
                 $translatedMjml = $mj['mjml'] ?? $mjml;
 
-                // Persist translated MJML to clone
-                $affected = $conn->update('bundle_grapesjsbuilder', ['custom_mjml' => $translatedMjml], ['email_id' => $cloneId]);
-                if (0 === $affected) {
-                    $conn->insert('bundle_grapesjsbuilder', ['email_id' => $cloneId, 'custom_mjml' => $translatedMjml]);
+                /** @var GrapesJsBuilder|null $cloneGrapes */
+                $cloneGrapes = $grapesModel->getGrapesJsFromEmailId($cloneId);
+                if ($cloneGrapes === null) {
+                    $cloneGrapes = new GrapesJsBuilder();
+                    $cloneGrapes->setEmail($clone);
+                }
+                if ($cloneGrapes->getCustomMjml() !== $translatedMjml) {
+                    $cloneGrapes->setCustomMjml($translatedMjml);
+                    $grapesModel->getRepository()->saveEntity($cloneGrapes);
                 }
 
                 // Compile MJML → HTML and set as custom_html so preview reflects translation immediately
-                $compiled = $mjmlCompiler->compile($translatedMjml, $clone->getTemplate());
-                if (($compiled['success'] ?? false) && !empty($compiled['html'])) {
-                    $clone->setCustomHtml($compiled['html']);
+                $compiled     = $mjmlCompiler->compile($translatedMjml, $clone->getTemplate());
+                $compileOk    = ($compiled['success'] ?? false) === true;
+                $compiledHtml = isset($compiled['html']) && is_string($compiled['html']) ? $compiled['html'] : '';
+
+                if ($compileOk && $compiledHtml !== '') {
+                    $clone->setCustomHtml($compiledHtml);
                 } else {
                     $logger->warning('[LeuchtfeuerTranslations] MJML compile failed; keeping existing custom_html', [
                         'cloneId' => $cloneId,
@@ -243,15 +258,15 @@ class EmailActionController extends FormController
                 'language'  => $clone->getLanguage(), // lowercase (e.g. "de")
                 'mjmlWrite' => $wroteMjml,
                 'urls'      => [
-                    'edit'    => $request->getSchemeAndHttpHost().'/s/emails/edit/'.$cloneId,
-                    'view'    => $request->getSchemeAndHttpHost().'/s/emails/view/'.$cloneId,
-                    'builder' => $request->getSchemeAndHttpHost().'/s/emails/builder/'.$cloneId,
-                    'preview' => $request->getSchemeAndHttpHost().'/email/preview/'.$cloneId,
+                    'edit'    => $this->generateUrl('mautic_email_action', ['objectAction' => 'edit',    'objectId' => $cloneId], UrlGeneratorInterface::ABSOLUTE_URL),
+                    'view'    => $this->generateUrl('mautic_email_action', ['objectAction' => 'view',    'objectId' => $cloneId], UrlGeneratorInterface::ABSOLUTE_URL),
+                    'builder' => $this->generateUrl('mautic_email_action', ['objectAction' => 'builder', 'objectId' => $cloneId], UrlGeneratorInterface::ABSOLUTE_URL),
+                    'preview' => $this->generateUrl('mautic_email_preview', ['objectId' => $cloneId], UrlGeneratorInterface::ABSOLUTE_URL),
                 ],
             ],
             'translation' => [
-                'subjectChanged' => (null !== $translatedSubject),
-                'mjmlChanged'    => (null !== $translatedMjml),
+                'subjectChanged' => ($translatedSubject !== null),
+                'mjmlChanged'    => ($translatedMjml !== null),
                 'samples'        => array_slice($samples, 0, 4),
                 'lockedMode'     => $lockedMode,
                 'lockedPairs'    => $lockedPairs,
