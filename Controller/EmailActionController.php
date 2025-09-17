@@ -93,16 +93,22 @@ class EmailActionController extends FormController
 
 
 
-        // 2) Read MJML from builder table
+        // 2) Read MJML using GrapesJsBuilderModel (avoid raw SQL / missing table prefix)
         $mjml = '';
         try {
-            $row  = $conn->fetchAssociative(
-                'SELECT custom_mjml FROM bundle_grapesjsbuilder WHERE email_id = :id LIMIT 1',
-                ['id' => $sourceEmail->getId()]
-            );
-            $mjml = isset($row['custom_mjml']) ? (string) $row['custom_mjml'] : '';
+            /** @var \MauticPlugin\GrapesJsBuilderBundle\Model\GrapesJsBuilderModel $grapesModel */
+            $grapesModel = $this->getModel(\MauticPlugin\GrapesJsBuilderBundle\Model\GrapesJsBuilderModel::class);
+
+            $grapes = $grapesModel->getGrapesJsFromEmailId((int) $sourceEmail->getId());
+            if (is_array($grapes) && isset($grapes['custom_mjml'])) {
+                $mjml = (string) $grapes['custom_mjml'];
+            } elseif (is_object($grapes) && method_exists($grapes, 'getCustomMjml')) {
+                $mjml = (string) $grapes->getCustomMjml();
+            } elseif (is_string($grapes)) {
+                $mjml = $grapes;
+            }
         } catch (\Throwable $e) {
-            $logger->error('[LeuchtfeuerTranslations] Failed to fetch MJML from bundle_grapesjsbuilder', [
+            $logger->error('[LeuchtfeuerTranslations] Failed to fetch MJML via GrapesJsBuilderModel', [
                 'emailId' => $sourceEmail->getId(),
                 'ex'      => $e->getMessage(),
             ]);
@@ -120,8 +126,8 @@ class EmailActionController extends FormController
             $clone->setEmailType($emailType);
             $clone->setVariantParent(null);
 
-            // Name + target language suffix
-            $clone->setName(rtrim(($emailName ?: 'Email').' ['.$targetLangApi.']'));
+            // Name + target language suffix (rtrim not needed)
+            $clone->setName(($emailName !== '' ? $emailName : 'Email') . ' [' . $targetLangApi . ']');
 
             // IMPORTANT: Mautic expects lowercase language code
             $clone->setLanguage($targetLangIso ?: $sourceLangGuess);
@@ -135,16 +141,27 @@ class EmailActionController extends FormController
 
             // Persist clone to get its ID
             $model->saveEntity($clone);
+
+            // Ensure Doctrine assigned an ID (avoid casting null→0)
+            $cloneId = $clone->getId();
+            if ($cloneId === null) {
+                $logger->error('[LeuchtfeuerTranslations] Clone persisted but ID is still null');
+
+                return new JsonResponse([
+                    'success' => false,
+                    'message' => 'Failed to persist cloned email (no ID assigned).',
+                ], Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
+            $cloneId = (int) $cloneId;
         } catch (\Throwable $e) {
             $logger->error('[LeuchtfeuerTranslations] Clone (entity __clone) failed', ['ex' => $e->getMessage()]);
 
             return new JsonResponse([
                 'success' => false,
-                'message' => 'Failed to clone email: '.$e->getMessage(),
+                'message' => 'Failed to clone email: ' . $e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
-        $cloneId = (int) $clone->getId();
 
         // 4) If we had MJML, write it to the clone first…
         $wroteMjml = false;
