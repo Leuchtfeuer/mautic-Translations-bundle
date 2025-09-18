@@ -22,4 +22,10 @@ return [
         ],
         // NOTE: removed from 'public' group to avoid unauthenticated/CSRF-less access
     ],
+
+    'assets' => [
+        'js' => [
+            'plugins/LeuchtfeuerTranslationsBundle/Assets/js/ai-translate.js',
+        ],
+    ],
 ];
