@@ -2,35 +2,43 @@
 
 namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Service;
 
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\GuzzleException;
 use Mautic\PluginBundle\Helper\IntegrationHelper;
+use MauticPlugin\LeuchtfeuerTranslationsBundle\Integration\LeuchtfeuerTranslationsIntegration;
 use Psr\Log\LoggerInterface;
 
 class DeeplClientService
 {
-    private IntegrationHelper $integrationHelper;
-    private ?LoggerInterface $logger;
+    /** DeepL endpoints */
+    private const API_URL_FREE = 'https://api-free.deepl.com/v2/translate';
+    private const API_URL_PRO  = 'https://api.deepl.com/v2/translate';
 
-    private string $apiUrlFree = 'https://api-free.deepl.com/v2/translate';
-    private string $apiUrlPro  = 'https://api.deepl.com/v2/translate';
-
-    public function __construct(IntegrationHelper $integrationHelper, ?LoggerInterface $logger = null)
-    {
-        $this->integrationHelper = $integrationHelper;
-        $this->logger            = $logger;
+    public function __construct(
+        private IntegrationHelper $integrationHelper,
+        private LoggerInterface $logger,   // logger is always available
+        private Client $http               // use Guzzle instead of cURL
+    ) {
     }
 
     /**
      * Plain-text translation (no HTML handling).
      * $params can include DeepL options like formality, etc.
      *
-     * @return array{success:bool, translation?:string, error?:string, host?:string, status?:int|null}
+     * @return array{
+     *   success:bool,
+     *   translation?:string,
+     *   error?:string,
+     *   host:string|null,
+     *   status:int|null
+     * }
      */
     public function translate(string $text, string $targetLang = 'DE', array $params = []): array
     {
         $payload = array_merge([
-            'text'                 => $text,
-            'target_lang'          => strtoupper($targetLang),
-            'preserve_formatting'  => 1,
+            'text'                => $text,
+            'target_lang'         => strtoupper($targetLang),
+            'preserve_formatting' => 1,
         ], $params);
 
         return $this->requestWithHostFailover($payload);
@@ -39,16 +47,22 @@ class DeeplClientService
     /**
      * HTML-aware translation (DeepL tag_handling=html).
      *
-     * @return array{success:bool, translation?:string, error?:string, host?:string, status?:int|null}
+     * @return array{
+     *   success:bool,
+     *   translation?:string,
+     *   error?:string,
+     *   host:string|null,
+     *   status:int|null
+     * }
      */
     public function translateHtml(string $html, string $targetLang = 'DE', array $params = []): array
     {
         $payload = array_merge([
-            'text'                 => $html,
-            'target_lang'          => strtoupper($targetLang),
-            'tag_handling'         => 'html',
-            'split_sentences'      => 'nonewlines',
-            'preserve_formatting'  => 1,
+            'text'                => $html,
+            'target_lang'         => strtoupper($targetLang),
+            'tag_handling'        => 'html',
+            'split_sentences'     => 'nonewlines',
+            'preserve_formatting' => 1,
         ], $params);
 
         return $this->requestWithHostFailover($payload);
@@ -57,15 +71,21 @@ class DeeplClientService
     /**
      * Detect plan by key and try free/pro host accordingly with 403 fallback.
      *
-     * @return array{success:bool, translation?:string, error?:string, host?:string, status?:int|null}
+     * @return array{
+     *   success:bool,
+     *   translation?:string,
+     *   error?:string,
+     *   host:string|null,
+     *   status:int|null
+     * }
      */
     private function requestWithHostFailover(array $payload): array
     {
-        $integration = $this->integrationHelper->getIntegrationObject('LeuchtfeuerTranslations');
+        $integration = $this->integrationHelper->getIntegrationObject(LeuchtfeuerTranslationsIntegration::NAME);
         $keys        = $integration ? $integration->getDecryptedApiKeys() : [];
         $apiKey      = $keys['deepl_api_key'] ?? '';
 
-        if ('' === $apiKey) {
+        if ($apiKey === '') {
             return [
                 'success' => false,
                 'error'   => 'API key not set',
@@ -75,8 +95,8 @@ class DeeplClientService
         }
 
         $guessFree = str_ends_with($apiKey, ':fx');
-        $firstHost = $guessFree ? $this->apiUrlFree : $this->apiUrlPro;
-        $altHost   = $guessFree ? $this->apiUrlPro : $this->apiUrlFree;
+        $firstHost = $guessFree ? self::API_URL_FREE : self::API_URL_PRO;
+        $altHost   = $guessFree ? self::API_URL_PRO : self::API_URL_FREE;
 
         $this->log('[LeuchtfeuerTranslations][DeepL] plan guess', [
             'guess'     => $guessFree ? 'free' : 'pro',
@@ -95,53 +115,53 @@ class DeeplClientService
             'status'    => $first['status'] ?? null,
         ]);
 
-        $second = $this->callDeepL($altHost, $apiKey, $payload);
-
-        return $second;
+        return $this->callDeepL($altHost, $apiKey, $payload);
     }
 
     /**
-     * Low-level HTTP request.
+     * Low-level HTTP request (Guzzle).
      * $payload is the full DeepL form body (we add auth_key here).
      *
-     * @return array{success:bool, translation?:string, error?:string, host?:string, status?:int|null}
+     * @return array{
+     *   success:bool,
+     *   translation?:string,
+     *   error?:string,
+     *   host:string|null,
+     *   status:int|null
+     * }
      */
     private function callDeepL(string $host, string $apiKey, array $payload): array
     {
         $data = array_merge(['auth_key' => $apiKey], $payload);
 
-        $ch = curl_init($host);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data, '', '&'));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Accept: application/json',
-            'Content-Type: application/x-www-form-urlencoded',
-        ]);
-
-        $response = curl_exec($ch);
-        $errno    = curl_errno($ch);
-        $error    = curl_error($ch);
-        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if (false === $response) {
-            $this->log('[LeuchtfeuerTranslations][DeepL] cURL error', [
-                'host'  => $host,
-                'errno' => $errno,
-                'error' => $error,
+        try {
+            $resp     = $this->http->request('POST', $host, [
+                'headers'     => ['Accept' => 'application/json'],
+                'form_params' => $data,
             ]);
+            $httpCode = $resp->getStatusCode();
+            $body     = (string) $resp->getBody();
+        } catch (GuzzleException $e) {
+            $this->log('[LeuchtfeuerTranslations][DeepL] HTTP error', [
+                'host'  => $host,
+                'error' => $e->getMessage(),
+                'code'  => (int) $e->getCode(),
+            ]);
+
+            $status = (int) $e->getCode();
+            $status = $status > 0 ? $status : null;
 
             return [
                 'success' => false,
-                'error'   => 'cURL error #'.$errno.': '.$error,
+                'error'   => $e->getMessage(),
                 'host'    => $host,
-                'status'  => null,
+                'status'  => $status,
             ];
         }
 
-        $json = json_decode($response, true);
+        $json = json_decode($body, true);
 
-        if (200 !== $httpCode) {
+        if ($httpCode !== 200) {
             $msg = is_array($json) && isset($json['message'])
                 ? (string) $json['message']
                 : ('HTTP error '.$httpCode);
@@ -155,7 +175,7 @@ class DeeplClientService
         }
 
         $translation = $json['translations'][0]['text'] ?? null;
-        if (null === $translation) {
+        if ($translation === null) {
             return [
                 'success' => false,
                 'error'   => 'Unexpected API response (no translations[0].text)',
@@ -174,10 +194,6 @@ class DeeplClientService
 
     private function log(string $msg, array $ctx = []): void
     {
-        if ($this->logger) {
-            $this->logger->info($msg, $ctx);
-        } else {
-            @error_log($msg.' '.json_encode($ctx));
-        }
+        $this->logger->info($msg, $ctx);
     }
 }
