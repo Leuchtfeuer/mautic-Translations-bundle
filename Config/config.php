@@ -26,6 +26,8 @@ return [
     'assets' => [
         'js' => [
             'plugins/LeuchtfeuerTranslationsBundle/Assets/js/ai-translate.js',
+            'plugins/LeuchtfeuerTranslationsBundle/Assets/js/config.js',
         ],
     ],
+
 ];

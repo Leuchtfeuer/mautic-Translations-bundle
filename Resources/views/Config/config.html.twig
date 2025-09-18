@@ -5,4 +5,5 @@
     <span id="deepl-api-test-result"></span>
 </form>
 
-<script src="/plugins/LeuchtfeuerTranslationsBundle/Resources/assets/js/config.js"></script>
+{# Load the JS file; no inline JS, no HTML inside the JS file #}
+<script src="{{ asset('plugins/LeuchtfeuerTranslationsBundle/Assets/js/config.js') }}" defer></script>
