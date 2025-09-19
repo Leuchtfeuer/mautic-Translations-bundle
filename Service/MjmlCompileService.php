@@ -2,12 +2,16 @@
 
 namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Service;
 
+use Mautic\CoreBundle\Helper\CoreParametersHelper;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Process\ExecutableFinder;
+use Symfony\Component\Process\Process;
 
 class MjmlCompileService
 {
     public function __construct(
-        private ?LoggerInterface $logger = null,
+        private LoggerInterface $logger,
+        private CoreParametersHelper $parametersHelper,
     ) {
     }
 
@@ -40,19 +44,19 @@ class MjmlCompileService
 
     private function findMjmlCli(): ?string
     {
-        // Try common ways to detect CLI
-        $candidates = ['mjml', '/usr/bin/mjml', '/usr/local/bin/mjml', '/bin/mjml'];
-        foreach ($candidates as $bin) {
-            $out = @shell_exec('command -v '.escapeshellarg($bin).' 2>/dev/null') ?: '';
-            if ('' !== $out) {
-                return trim($out);
-            }
+        // Prefer absolute candidates first (fast path)
+        $absoluteCandidates = ['/usr/bin/mjml', '/usr/local/bin/mjml', '/bin/mjml'];
+        foreach ($absoluteCandidates as $bin) {
             if (is_executable($bin)) {
                 return $bin;
             }
         }
 
-        return null;
+        // Then look up in PATH
+        $finder = new ExecutableFinder();
+        $found  = $finder->find('mjml');
+
+        return $found ?: null;
     }
 
     /**
@@ -60,8 +64,11 @@ class MjmlCompileService
      */
     private function compileViaCli(string $cli, string $mjml): array
     {
-        $in  = tempnam(sys_get_temp_dir(), 'mjml_in_') ?: null;
-        $out = tempnam(sys_get_temp_dir(), 'mjml_out_') ?: null;
+        // Use configured Mautic tmp path if available; fallback to system tmp
+        $tmpDir = (string) ($this->parametersHelper->get('tmp_path') ?: sys_get_temp_dir());
+
+        $in  = @tempnam($tmpDir, 'mjml_in_') ?: null;
+        $out = @tempnam($tmpDir, 'mjml_out_') ?: null;
 
         if (!$in || !$out) {
             return ['success' => false, 'error' => 'Unable to create temp files'];
@@ -69,19 +76,20 @@ class MjmlCompileService
 
         file_put_contents($in, $mjml);
 
-        $cmd = escapeshellcmd($cli).' '.escapeshellarg($in).' -o '.escapeshellarg($out).' 2>&1';
-        $this->log('[LeuchtfeuerTranslations][MJML] invoking CLI', ['cmd' => $cmd]);
+        $process = new Process([$cli, $in, '-o', $out]);
+        $process->setTimeout(30);
+        $this->log('[LeuchtfeuerTranslations][MJML] invoking CLI', ['cmd' => $process->getCommandLine()]);
+        $process->run();
 
-        $output = @shell_exec($cmd);
-        $ok     = is_file($out) && filesize($out) > 0;
-
-        $html   = $ok ? file_get_contents($out) : null;
+        $ok   = is_file($out) && filesize($out) > 0;
+        $html = $ok ? @file_get_contents($out) : false;
 
         @unlink($in);
         @unlink($out);
 
-        if (!$ok || false === $html) {
-            return ['success' => false, 'error' => trim((string) $output)];
+        if (!$ok || $html === false) {
+            $err = trim($process->getErrorOutput() ?: $process->getOutput() ?: 'Unknown MJML CLI error');
+            return ['success' => false, 'error' => $err];
         }
 
         return ['success' => true, 'html' => $html];
@@ -90,6 +98,9 @@ class MjmlCompileService
     /**
      * Extremely light fallback so previews don't stay stale if CLI is missing.
      * Not a full MJML renderer—just unwraps key tags to reasonable HTML.
+     *
+     * @see https://mjml.io/documentation/
+     * @see https://github.com/mjmlio/mjml
      */
     private function veryLightFallback(string $mjml): string
     {
@@ -131,10 +142,6 @@ class MjmlCompileService
 
     private function log(string $msg, array $ctx = []): void
     {
-        if ($this->logger) {
-            $this->logger->info($msg, $ctx);
-        } else {
-            @error_log($msg.' '.json_encode($ctx));
-        }
+        $this->logger->info($msg, $ctx);
     }
 }
