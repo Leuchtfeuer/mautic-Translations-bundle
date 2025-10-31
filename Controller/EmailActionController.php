@@ -7,8 +7,10 @@ use Mautic\CoreBundle\Controller\FormController;
 use Mautic\CoreBundle\Security\Permissions\CorePermissions;
 use Mautic\EmailBundle\Entity\Email;
 use Mautic\EmailBundle\Model\EmailModel;
+use Mautic\PluginBundle\Helper\IntegrationHelper;
 use MauticPlugin\GrapesJsBuilderBundle\Entity\GrapesJsBuilder;
 use MauticPlugin\GrapesJsBuilderBundle\Model\GrapesJsBuilderModel;
+use MauticPlugin\LeuchtfeuerTranslationsBundle\Integration\LeuchtfeuerTranslationsIntegration;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\DeeplClientService;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlCompileService;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlTranslateService;
@@ -31,11 +33,30 @@ class EmailActionController extends FormController
         CorePermissions $security,
         Connection $conn,
         TranslatorInterface $translator,
+        IntegrationHelper $integrationHelper
     ): Response {
         $logger->info('[LeuchtfeuerTranslations] translateAction start', [
             'objectId'   => $objectId,
             'targetLang' => $request->get('targetLang'),
         ]);
+
+        // Respect plugin toggle (Published switch in Plugins UI)
+        $integration = $integrationHelper->getIntegrationObject(LeuchtfeuerTranslationsIntegration::NAME);
+        $settings    = $integration ? $integration->getIntegrationSettings() : null;
+        $enabled     = $settings && method_exists($settings, 'isPublished') ? $settings->isPublished() : false;
+
+        if (!$enabled) {
+            $logger->info('[LeuchtfeuerTranslations] translateAction blocked: integration disabled');
+
+            return new JsonResponse(
+                [
+                    'success' => false,
+                    // Using literal is fine; will be returned as-is if no translation key exists.
+                    'message' => $translator->trans('Feature is disabled. Enable the plugin to use AI translation.'),
+                ],
+                Response::HTTP_FORBIDDEN
+            );
+        }
 
         /** @var EmailModel $model */
         $model = $this->getModel(EmailModel::class);
