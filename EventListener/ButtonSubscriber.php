@@ -4,8 +4,7 @@ namespace MauticPlugin\LeuchtfeuerTranslationsBundle\EventListener;
 
 use Mautic\CoreBundle\CoreEvents;
 use Mautic\CoreBundle\Event\CustomButtonEvent;
-use Mautic\PluginBundle\Helper\IntegrationHelper;
-use MauticPlugin\LeuchtfeuerTranslationsBundle\Integration\LeuchtfeuerTranslationsIntegration;
+use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\FeatureGateService;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Routing\RouterInterface;
@@ -17,7 +16,7 @@ class ButtonSubscriber implements EventSubscriberInterface
         private RouterInterface $router,
         private LoggerInterface $logger,
         private TranslatorInterface $translator,
-        private IntegrationHelper $integrationHelper,
+        private FeatureGateService $featureGate,
     ) {
     }
 
@@ -30,7 +29,7 @@ class ButtonSubscriber implements EventSubscriberInterface
 
     public function inject(CustomButtonEvent $event): void
     {
-        $loc = $event->getLocation(); // no need to cast
+        $loc = $event->getLocation();
 
         // Only the Options dropdown on the email detail page
         if ('page_actions' !== $loc) {
@@ -38,7 +37,7 @@ class ButtonSubscriber implements EventSubscriberInterface
         }
 
         // Respect plugin toggle (Published switch in Plugins UI)
-        if (!$this->isPluginEnabled()) {
+        if (!$this->featureGate->isEnabled()) {
             // $this->logger->info('[LeuchtfeuerTranslations] skipped button: integration disabled');
             return;
         }
@@ -69,16 +68,5 @@ class ButtonSubscriber implements EventSubscriberInterface
         $event->addButton($dropdownItem, 'page_actions', $routeFilter);
 
         $this->logger->info('[LeuchtfeuerTranslations] dropdown item added', ['location' => $loc]);
-    }
-
-    private function isPluginEnabled(): bool
-    {
-        $integration = $this->integrationHelper->getIntegrationObject(LeuchtfeuerTranslationsIntegration::NAME);
-        if (!$integration) {
-            return false;
-        }
-
-        $settings = $integration->getIntegrationSettings();
-        return $settings && method_exists($settings, 'isPublished') && $settings->isPublished();
     }
 }

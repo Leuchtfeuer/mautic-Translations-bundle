@@ -14,7 +14,8 @@
   "require": {
     "php": "^8.1",
     "ext-json": "*",
-    "mautic/core-lib": "^5.0"
+    "mautic/core-lib": "^5.0",
+    "mautic/grapes-js-builder-bundle": "^5.0"
   },
 
   "require-dev": {

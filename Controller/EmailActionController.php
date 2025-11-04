@@ -2,16 +2,14 @@
 
 namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Controller;
 
-use Doctrine\DBAL\Connection;
 use Mautic\CoreBundle\Controller\FormController;
 use Mautic\CoreBundle\Security\Permissions\CorePermissions;
 use Mautic\EmailBundle\Entity\Email;
 use Mautic\EmailBundle\Model\EmailModel;
-use Mautic\PluginBundle\Helper\IntegrationHelper;
 use MauticPlugin\GrapesJsBuilderBundle\Entity\GrapesJsBuilder;
 use MauticPlugin\GrapesJsBuilderBundle\Model\GrapesJsBuilderModel;
-use MauticPlugin\LeuchtfeuerTranslationsBundle\Integration\LeuchtfeuerTranslationsIntegration;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\DeeplClientService;
+use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\FeatureGateService;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlCompileService;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlTranslateService;
 use Psr\Log\LoggerInterface;
@@ -31,9 +29,8 @@ class EmailActionController extends FormController
         MjmlCompileService $mjmlCompiler,
         LoggerInterface $logger,
         CorePermissions $security,
-        Connection $conn,
         TranslatorInterface $translator,
-        IntegrationHelper $integrationHelper
+        FeatureGateService $featureGate
     ): Response {
         $logger->info('[LeuchtfeuerTranslations] translateAction start', [
             'objectId'   => $objectId,
@@ -41,18 +38,13 @@ class EmailActionController extends FormController
         ]);
 
         // Respect plugin toggle (Published switch in Plugins UI)
-        $integration = $integrationHelper->getIntegrationObject(LeuchtfeuerTranslationsIntegration::NAME);
-        $settings    = $integration ? $integration->getIntegrationSettings() : null;
-        $enabled     = $settings && method_exists($settings, 'isPublished') ? $settings->isPublished() : false;
-
-        if (!$enabled) {
+        if (!$featureGate->isEnabled()) {
             $logger->info('[LeuchtfeuerTranslations] translateAction blocked: integration disabled');
 
             return new JsonResponse(
                 [
                     'success' => false,
-                    // Using literal is fine; will be returned as-is if no translation key exists.
-                    'message' => $translator->trans('Feature is disabled. Enable the plugin to use AI translation.'),
+                    'message' => $translator->trans('plugin.leuchtfeuertranslations.error.integration_disabled'),
                 ],
                 Response::HTTP_FORBIDDEN
             );
@@ -109,7 +101,6 @@ class EmailActionController extends FormController
 
         $sourceLangGuess = strtolower($sourceEmail->getLanguage() ?: '');
         $emailName       = $sourceEmail->getName() ?: '';
-        $isCodeMode      = 'mautic_code_mode' === $sourceEmail->getTemplate();
 
         // 1) Quick probe (do not leak probe details to client)
         $probe = $deepl->translate('Hello from Mautic', $targetLangApi);
