@@ -1,3 +1,5 @@
+# Attention: Currently composer install does not work, will be fixed asap!
+
 # Translations by Leuchtfeuer (Mautic Plugin)
 
 ## Overview / Purpose / Features
