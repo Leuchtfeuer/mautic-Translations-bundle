@@ -7,6 +7,7 @@ use GuzzleHttp\Exception\GuzzleException;
 use Mautic\PluginBundle\Helper\IntegrationHelper;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Integration\LeuchtfeuerTranslationsIntegration;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpFoundation\Response; // ← added
 
 class DeeplClientService
 {
@@ -168,7 +169,7 @@ class DeeplClientService
             $json = null;
         }
 
-        if ($httpCode !== 200) {
+        if ($httpCode !== Response::HTTP_OK) {
             $msg = (is_array($json) && isset($json['message']))
                 ? (string) $json['message']
                 : ('HTTP error '.$httpCode);
