@@ -154,7 +154,7 @@ class MjmlTranslateService
     {
         $orig = $html;
         $resp = $this->deepl->translateHtml($html, $targetLangApi);
-        if ($resp['success'] !== true) {
+        if (true !== $resp['success']) {
             $this->log('[LeuchtfeuerTranslations][MJML] translateInnerHtml failed', ['error' => $resp['error'] ?? 'unknown']);
 
             return $orig;
@@ -174,7 +174,7 @@ class MjmlTranslateService
     {
         $orig = $text;
         $resp = $this->deepl->translate($text, $targetLangApi);
-        if ($resp['success'] !== true) {
+        if (true !== $resp['success']) {
             $this->log('[LeuchtfeuerTranslations][MJML] translateRichText failed', ['error' => $resp['error'] ?? 'unknown']);
 
             return $orig;
@@ -205,7 +205,7 @@ class MjmlTranslateService
                 $out .= $p['value']; // keep as-is
             } else {
                 $resp = $this->deepl->translate($p['value'], $targetLangApi);
-                $out .= ($resp['success'] === true) ? ($resp['translation'] ?? $p['value']) : $p['value'];
+                $out .= (true === $resp['success']) ? ($resp['translation'] ?? $p['value']) : $p['value'];
             }
         }
 
