@@ -171,7 +171,8 @@ class EmailActionController extends FormController
                     'message' => $translator->trans('plugin.leuchtfeuertranslations.error.clone_persist_failed'),
                 ], Response::HTTP_INTERNAL_SERVER_ERROR);
             }
-            $cloneId = (int) $cloneId;
+        // No need to cast to int; Doctrine returns an int already.
+
         } catch (\Throwable $e) {
             $logger->error('[LeuchtfeuerTranslations] Clone (entity __clone) failed', ['ex' => $e->getMessage()]);
 
