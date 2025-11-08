@@ -10,6 +10,8 @@
     }
   ],
   "homepage": "https://www.leuchtfeuer.com",
+  "minimum-stability": "dev",
+  "prefer-stable": true,
 
   "require": {
     "php": "^8.1",
@@ -20,11 +22,13 @@
 
   "require-dev": {
     "friendsofphp/php-cs-fixer": "^3.14",
-    "phpstan/phpstan": "^2.0"
+    "symfony/browser-kit": "^5.4",
+    "phpstan/phpstan": "^2.0",
+    "phpstan/phpstan-deprecation-rules": "^1.1",
+    "phpstan/phpstan-phpunit": "^1.4",
+    "phpstan/phpstan-strict-rules": "^1.5",
+    "rector/rector": "^1.2"
   },
-  "minimum-stability": "dev",
-  "prefer-stable": true,
-
 
   "extra": {
     "install-directory-name": "LeuchtfeuerTranslationsBundle"
@@ -33,6 +37,33 @@
   "autoload": {
     "psr-4": {
       "MauticPlugin\\LeuchtfeuerTranslationsBundle\\": ""
+    }
+  },
+
+  "repositories": [
+    {
+      "type": "git",
+      "url": "https://github.com/mautic/FOSOAuthServerBundle.git"
+    },
+    {
+      "type": "git",
+      "url": "https://github.com/mautic/BazingaOAuthServerBundle.git"
+    },
+    {
+      "type": "git",
+      "url": "https://github.com/mautic/SpBundle.git",
+      "canonical": false
+    },
+    {
+      "type": "git",
+      "url": "https://github.com/mautic/SymfonyBridgeBundle.git",
+      "canonical": false
+    }
+  ],
+
+  "config": {
+    "allow-plugins": {
+      "symfony/flex": true
     }
   }
 }
