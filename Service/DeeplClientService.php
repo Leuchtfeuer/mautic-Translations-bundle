@@ -26,6 +26,7 @@ class DeeplClientService
      * Plain-text translation (no HTML handling).
      * $params can include DeepL options like formality, etc.
      *
+     * @param array<string, string|int|bool|array<int,string>|null> $params
      * @return array{
      *   success:bool,
      *   translation?:string,
@@ -48,6 +49,7 @@ class DeeplClientService
     /**
      * HTML-aware translation (DeepL tag_handling=html).
      *
+     * @param array<string, string|int|bool|array<int,string>|null> $params
      * @return array{
      *   success:bool,
      *   translation?:string,
@@ -72,6 +74,7 @@ class DeeplClientService
     /**
      * Detect plan by key and try free/pro host accordingly with 403 fallback.
      *
+     * @param array<string, string|int|bool|array<int,string>|null> $payload
      * @return array{
      *   success:bool,
      *   translation?:string,
@@ -82,9 +85,16 @@ class DeeplClientService
      */
     private function requestWithHostFailover(array $payload): array
     {
-        $integration = $this->integrationHelper->getIntegrationObject(LeuchtfeuerTranslationsIntegration::NAME);
-        $keys        = $integration ? $integration->getDecryptedApiKeys() : [];
-        $apiKey      = $keys['deepl_api_key'] ?? '';
+        $integrationObj = $this->integrationHelper->getIntegrationObject(LeuchtfeuerTranslationsIntegration::NAME);
+
+        if ($integrationObj !== false) {
+            /** @var array<string,string> $keys */
+            $keys = $integrationObj->getDecryptedApiKeys();
+        } else {
+            $keys = [];
+        }
+
+        $apiKey = isset($keys['deepl_api_key']) ? (string) $keys['deepl_api_key'] : '';
 
         if ('' === $apiKey) {
             return [
@@ -123,6 +133,7 @@ class DeeplClientService
      * Low-level HTTP request (Guzzle).
      * $payload is the full DeepL form body (we add auth_key here).
      *
+     * @param array<string, string|int|bool|array<int,string>|null> $payload
      * @return array{
      *   success:bool,
      *   translation?:string,
@@ -201,6 +212,9 @@ class DeeplClientService
         ];
     }
 
+    /**
+     * @param array<string, mixed> $ctx
+     */
     private function log(string $msg, array $ctx = []): void
     {
         $this->logger->info($msg, $ctx);
