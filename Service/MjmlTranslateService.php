@@ -63,7 +63,7 @@ class MjmlTranslateService
                 continue;
             }
 
-            if ($seg['locked']) {
+            if (isset($seg['locked']) && $seg['locked']) {
                 // Inside locked block: append verbatim
                 $rebuilt .= $seg['text'];
                 continue;
@@ -329,16 +329,24 @@ class MjmlTranslateService
         ];
     }
 
+    /**
+     * @param array<string,string> &$blocks
+     */
     private function extractAndShieldMjRaw(string $mjml, array &$blocks): string
     {
-        return preg_replace_callback('/<mj-raw>(.*?)<\/mj-raw>/si', function ($m) use (&$blocks) {
+        $res = preg_replace_callback('/<mj-raw>(.*?)<\/mj-raw>/si', function ($m) use (&$blocks) {
             $key          = '__MJRAW_'.count($blocks).'__';
             $blocks[$key] = $m[0]; // entire block
 
             return $key;
         }, $mjml);
+
+        return is_string($res) ? $res : $mjml;
     }
 
+    /**
+     * @param array<string,string> $blocks
+     */
     private function unshieldMjRaw(string $mjml, array $blocks): string
     {
         if (!$blocks) {
