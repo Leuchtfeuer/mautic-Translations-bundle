@@ -1,13 +1,26 @@
 includes:
-        - vendor/phpstan/phpstan-deprecation-rules/rules.neon
-        - vendor/phpstan/phpstan-strict-rules/rules.neon
-        - vendor/phpstan/phpstan-phpunit/extension.neon
-        - vendor/phpstan/phpstan-phpunit/rules.neon
+  - vendor/phpstan/phpstan-deprecation-rules/rules.neon
+  - vendor/phpstan/phpstan-strict-rules/rules.neon
+  - vendor/phpstan/phpstan-phpunit/extension.neon
+  - vendor/phpstan/phpstan-phpunit/rules.neon
 
 parameters:
-    level: max
-    treatPhpDocTypesAsCertain: false
-    paths:
-        - .
-    excludePaths:
-        - vendor
+  level: max
+  treatPhpDocTypesAsCertain: false
+  reportUnmatchedIgnoredErrors: true
+
+  paths:
+    - .
+
+  excludePaths:
+    - vendor
+
+  scanFiles:
+    - vendor/mautic/grapes-js-builder-bundle/Entity/GrapesJsBuilder.php
+    - vendor/mautic/grapes-js-builder-bundle/Entity/GrapesJsBuilderRepository.php
+    - vendor/mautic/grapes-js-builder-bundle/Model/GrapesJsBuilderModel.php
+
+  ignoreErrors:
+    - message: '#^Parameter \#3 \$route of method Mautic\\CoreBundle\\Event\\CustomButtonEvent::addButton\(\) expects string\|null, array<int,.* given\.$#'
+      paths:
+        - EventListener/ButtonSubscriber.php
