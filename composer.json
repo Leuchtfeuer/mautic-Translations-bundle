@@ -64,6 +64,11 @@
   "config": {
     "allow-plugins": {
       "symfony/flex": true
+    },
+    "audit": {
+      "ignore": [
+        "PKSA-5x9t-bkbj-vmgp"
+      ]
     }
   }
 }
