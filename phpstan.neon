@@ -21,6 +21,6 @@ parameters:
     - vendor/mautic/grapes-js-builder-bundle/Model/GrapesJsBuilderModel.php
 
   ignoreErrors:
-    - message: '#^Method Mautic\\CoreBundle\\Event\\CustomButtonEvent::addButton\(\) invoked with 4 parameters, 1-3 required\.$#'
+    - message: '#^Parameter #3 \$route of method Mautic\\CoreBundle\\Event\\CustomButtonEvent::addButton\(\) expects string\|null, array<int,.* given\.$#'
       paths:
         - EventListener/ButtonSubscriber.php
