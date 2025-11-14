@@ -59,12 +59,9 @@ class ButtonSubscriber implements EventSubscriberInterface
         ];
 
         // Only on /s/emails/view/{id}
-        $event->addButton(
-            $dropdownItem,
-            'page_actions',
-            'mautic_email_action',
-            ['objectAction' => 'view']
-        );
+        $routeFilter = ['mautic_email_action', ['objectAction' => 'view']];
+
+        $event->addButton($dropdownItem, 'page_actions', $routeFilter);
 
         $this->logger->info('[LeuchtfeuerTranslations] dropdown item added', ['location' => $loc]);
     }

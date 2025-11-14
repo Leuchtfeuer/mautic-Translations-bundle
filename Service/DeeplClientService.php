@@ -119,7 +119,7 @@ class DeeplClientService
         ]);
 
         $first = $this->callDeepL($firstHost, $apiKey, $payload);
-        if (403 !== ($first['status'] ?? null)) {
+        if (Response::HTTP_FORBIDDEN !== ($first['status'] ?? null)) {
             return $first;
         }
 
