@@ -15,7 +15,6 @@ class ApiTestController extends AbstractController
      */
     public function testApiAction(DeeplClientService $deepl): JsonResponse
     {
-        /** @var array{success:bool, translation?:string, error?:string, host:string|null, status:int|null} $result */
         $result = $deepl->translate('Hello', 'DE');
 
         $isSuccess = isset($result['success']) && true === $result['success'];
