@@ -242,9 +242,7 @@ class EmailActionController extends AbstractFormController
                 }
 
                 // Compile MJML → HTML and set as custom_html so preview reflects translation immediately
-                $templateVal  = $clone->getTemplate();
-                $templateArg  = is_string($templateVal) ? $templateVal : null;
-                $compiled     = $mjmlCompiler->compile($translatedMjml, $templateArg);
+                $compiled     = $mjmlCompiler->compile($translatedMjml);
                 $compileOk    = (true === ($compiled['success'] ?? false));
                 $compiledHtml = isset($compiled['html']) && is_string($compiled['html']) ? $compiled['html'] : '';
 

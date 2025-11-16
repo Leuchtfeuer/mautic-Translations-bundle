@@ -24,7 +24,7 @@ class MjmlCompileService
      *
      * @return array{success: bool, html?: string, error?: string}
      */
-    public function compile(string $mjml, ?string $template = null): array
+    public function compile(string $mjml): array
     {
         // A) Try mjml CLI
         $cli = $this->findMjmlCli();
