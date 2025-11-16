@@ -10,7 +10,7 @@ use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
 class LeuchtfeuerTranslationsExtension extends Extension
 {
     /**
-     * @phpstan-param array<mixed, mixed> $configs
+     * @param array<mixed, mixed> $configs
      */
     public function load(array $configs, ContainerBuilder $container): void
     {
