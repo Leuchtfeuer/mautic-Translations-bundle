@@ -24,7 +24,7 @@ class MjmlCompileService
      *
      * @return array{success: bool, html?: string, error?: string}
      */
-    public function compile(string $mjml, ?string $template = null): array
+    public function compile(string $mjml): array
     {
         // A) Try mjml CLI
         $cli = $this->findMjmlCli();
@@ -56,7 +56,7 @@ class MjmlCompileService
         $finder = new ExecutableFinder();
         $found  = $finder->find('mjml');
 
-        return $found ?: null;
+        return is_string($found) ? $found : null;
     }
 
     /**
@@ -67,22 +67,23 @@ class MjmlCompileService
     private function compileViaCli(string $cli, string $mjml): array
     {
         // Use only the configured Mautic tmp path (no fallback to system tmp)
-        $tmpDir = (string) ($this->parametersHelper->get('tmp_path') ?? '');
+        $tmpConf = $this->parametersHelper->get('tmp_path');
+        $tmpDir  = is_string($tmpConf) ? $tmpConf : '';
 
-        if ($tmpDir === '' || !is_dir($tmpDir) || !is_writable($tmpDir)) {
+        if ('' === $tmpDir || !is_dir($tmpDir) || !is_writable($tmpDir)) {
             return [
                 'success' => false,
                 'error'   => sprintf('Invalid tmp_path: "%s". Ensure it exists and is writable.', $tmpDir),
             ];
         }
 
-        $in  = tempnam($tmpDir, 'mjml_in_');
-        if ($in === false) {
+        $in = tempnam($tmpDir, 'mjml_in_');
+        if (false === $in) {
             return ['success' => false, 'error' => 'Unable to create input temp file'];
         }
 
         $bytes = file_put_contents($in, $mjml);
-        if ($bytes === false) {
+        if (false === $bytes) {
             // try to clean up input file
             if (is_file($in) && !unlink($in)) {
                 $this->log('[LeuchtfeuerTranslations][MJML] Failed to delete temp file', ['file' => $in]);
@@ -92,7 +93,7 @@ class MjmlCompileService
         }
 
         $out = tempnam($tmpDir, 'mjml_out_');
-        if ($out === false) {
+        if (false === $out) {
             if (is_file($in) && !unlink($in)) {
                 $this->log('[LeuchtfeuerTranslations][MJML] Failed to delete temp file', ['file' => $in]);
             }
@@ -116,8 +117,11 @@ class MjmlCompileService
             $this->log('[LeuchtfeuerTranslations][MJML] Failed to delete temp file', ['file' => $out]);
         }
 
-        if (!$ok || $html === false) {
-            $err = trim($process->getErrorOutput() ?: $process->getOutput() ?: 'Unknown MJML CLI error');
+        if (false === $ok || false === $html) {
+            $errOut = $process->getErrorOutput();
+            $stdOut = $process->getOutput();
+            $chosen = '' !== $errOut ? $errOut : ('' !== $stdOut ? $stdOut : 'Unknown MJML CLI error');
+            $err    = trim($chosen);
 
             return ['success' => false, 'error' => $err];
         }
@@ -137,39 +141,53 @@ class MjmlCompileService
         $html = $mjml;
 
         // Strip mjml/mj-head wrappers; keep <mj-preview> text in a hidden block
-        $html = preg_replace('/<\/?mjml[^>]*>/i', '', $html);
-        $html = preg_replace('/<\/?mj-head[^>]*>.*?<\/mj-head>/is', '', $html);
+        $html = $this->rxReplace('/<\/?mjml[^>]*>/i', '', $html);
+        $html = $this->rxReplace('/<\/?mj-head[^>]*>.*?<\/mj-head>/is', '', $html);
 
         // mj-preview -> hidden preview block
-        $html = preg_replace('/<mj-preview>(.*?)<\/mj-preview>/is', '<div style="display:none;visibility:hidden;">$1</div>', $html);
+        $html = $this->rxReplace('/<mj-preview>(.*?)<\/mj-preview>/is', '<div style="display:none;visibility:hidden;">$1</div>', $html);
 
         // mj-text -> p
-        $html = preg_replace('/<mj-text\b[^>]*>(.*?)<\/mj-text>/is', '<p>$1</p>', $html);
+        $html = $this->rxReplace('/<mj-text\b[^>]*>(.*?)<\/mj-text>/is', '<p>$1</p>', $html);
 
         // mj-button -> <a>
-        $html = preg_replace('/<mj-button\b([^>]*)>(.*?)<\/mj-button>/is', '<p><a$1>$2</a></p>', $html);
+        $html = $this->rxReplace('/<mj-button\b([^>]*)>(.*?)<\/mj-button>/is', '<p><a$1>$2</a></p>', $html);
         // strip mj*-style-like attributes from <a>
-        $html = preg_replace('/<a([^>]*)\bmj-?[a-z0-9_-]+="[^"]*"([^>]*)>/i', '<a$1$2>', $html);
+        $html = $this->rxReplace('/<a([^>]*)\bmj-?[a-z0-9_-]+="[^"]*"([^>]*)>/i', '<a$1$2>', $html);
 
         // mj-image -> <img>
-        $html = preg_replace('/<mj-image\b([^>]*)\/?>/is', '<img $1 />', $html);
+        $html = $this->rxReplace('/<mj-image\b([^>]*)\/?>/is', '<img $1 />', $html);
 
         // unwrap sections/columns/body
-        $html = preg_replace('/<\/?mj-body[^>]*>/i', '', $html);
-        $html = preg_replace('/<\/?mj-section[^>]*>/i', '', $html);
-        $html = preg_replace('/<\/?mj-column[^>]*>/i', '', $html);
+        $html = $this->rxReplace('/<\/?mj-body[^>]*>/i', '', $html);
+        $html = $this->rxReplace('/<\/?mj-section[^>]*>/i', '', $html);
+        $html = $this->rxReplace('/<\/?mj-column[^>]*>/i', '', $html);
 
         // Remove mj-raw wrappers but keep inner HTML intact
-        $html = preg_replace('/<mj-raw>(.*?)<\/mj-raw>/is', '$1', $html);
+        $html = $this->rxReplace('/<mj-raw>(.*?)<\/mj-raw>/is', '$1', $html);
 
         // Wrap if bare
-        if (!preg_match('/<html\b/i', $html)) {
+        $hasHtmlTag = preg_match('/<html\b/i', $html);
+        if (1 !== $hasHtmlTag) {
             $html = "<!doctype html>\n<html><body>\n".$html."\n</body></html>";
         }
 
         return $html;
     }
 
+    /**
+     * Safe regex replace that preserves string type if PCRE returns null.
+     */
+    private function rxReplace(string $pattern, string $replacement, string $subject): string
+    {
+        $res = preg_replace($pattern, $replacement, $subject);
+
+        return is_string($res) ? $res : $subject;
+    }
+
+    /**
+     * @param array<string, mixed> $ctx
+     */
     private function log(string $msg, array $ctx = []): void
     {
         $this->logger->info($msg, $ctx);

@@ -16,6 +16,14 @@ class MjmlTranslateService
      * Translate MJML in-place, respecting LOCKED markers and <mj-raw>.
      * Uses DeepL HTML mode for inner HTML (no placeholder shielding).
      *
+     * @return array{
+     *   changed: bool,
+     *   mjml: string,
+     *   samples: array<int, array{from:string,to:string}>,
+     *   lockedMode: bool,
+     *   lockedPairs: int
+     * }
+     *
      * @todo Consider refactoring parsing to DOM/SimpleXML as suggested in review,
      *       instead of regex-based handling.
      */
@@ -55,7 +63,7 @@ class MjmlTranslateService
                 continue;
             }
 
-            if ($seg['locked']) {
+            if (isset($seg['locked']) && $seg['locked']) {
                 // Inside locked block: append verbatim
                 $rebuilt .= $seg['text'];
                 continue;
@@ -88,6 +96,8 @@ class MjmlTranslateService
      * - exclude <mj-raw>
      * - translate mj-preview, mj-text, mj-button (inner HTML)
      * - translate title/alt attributes with token-preserving logic.
+     *
+     * @param array<int, array{from:string,to:string}> $samples
      */
     private function translateMjmlSegmentCore(string $frag, string $targetLangApi, array &$samples): string
     {
@@ -96,21 +106,23 @@ class MjmlTranslateService
         $frag      = $this->extractAndShieldMjRaw($frag, $rawBlocks);
 
         // <mj-preview>…</mj-preview>
-        $frag = preg_replace_callback('/<mj-preview>(.*?)<\/mj-preview>/si', function ($m) use ($targetLangApi, &$samples) {
+        $tmp = preg_replace_callback('/<mj-preview>(.*?)<\/mj-preview>/si', function ($m) use ($targetLangApi, &$samples) {
             $translated = $this->translateInnerHtml($m[1], $targetLangApi, $samples);
 
             return '<mj-preview>'.$translated.'</mj-preview>';
         }, $frag);
+        $frag = is_string($tmp) ? $tmp : $frag;
 
         // <mj-text>…</mj-text>
-        $frag = preg_replace_callback('/<mj-text\b[^>]*>(.*?)<\/mj-text>/si', function ($m) use ($targetLangApi, &$samples) {
+        $tmp = preg_replace_callback('/<mj-text\b[^>]*>(.*?)<\/mj-text>/si', function ($m) use ($targetLangApi, &$samples) {
             $translated = $this->translateInnerHtml($m[1], $targetLangApi, $samples);
 
             return str_replace($m[1], $translated, $m[0]);
         }, $frag);
+        $frag = is_string($tmp) ? $tmp : $frag;
 
         // <mj-button ...>label</mj-button> + title=""
-        $frag = preg_replace_callback('/<mj-button\b([^>]*)>(.*?)<\/mj-button>/si', function ($m) use ($targetLangApi, &$samples) {
+        $tmp = preg_replace_callback('/<mj-button\b([^>]*)>(.*?)<\/mj-button>/si', function ($m) use ($targetLangApi, &$samples) {
             $attrs   = $m[1];
             $inner   = $m[2];
 
@@ -126,11 +138,12 @@ class MjmlTranslateService
 
             return '<mj-button'.$attrsTr.'>'.$innerTr.'</mj-button>';
         }, $frag);
+        $frag = is_string($tmp) ? $tmp : $frag;
 
         // <mj-image ... alt="..."/>  (preserve self-closing)
-        $frag = preg_replace_callback('/<mj-image\b([^>]*?)(\s*\/?)>/si', function ($m) use ($targetLangApi, &$samples) {
+        $tmp = preg_replace_callback('/<mj-image\b([^>]*?)(\s*\/?)>/si', function ($m) use ($targetLangApi, &$samples) {
             $attrs   = $m[1];
-            $closing = $m[2] ?: '';
+            $closing = $m[2]; // always present per regex
             $attrsTr = preg_replace_callback('/\balt="([^"]*)"/i', function ($mm) use ($targetLangApi, &$samples) {
                 $t = $this->translateAttributePreserveTokens($mm[1], $targetLangApi, $samples);
 
@@ -139,6 +152,7 @@ class MjmlTranslateService
 
             return '<mj-image'.$attrsTr.$closing.'>';
         }, $frag);
+        $frag = is_string($tmp) ? $tmp : $frag;
 
         // Restore <mj-raw> blocks
         $frag = $this->unshieldMjRaw($frag, $rawBlocks);
@@ -149,12 +163,14 @@ class MjmlTranslateService
     /**
      * DeepL HTML-mode translation for inner HTML chunks.
      * Records a sample if text changed.
+     *
+     * @param array<int, array{from:string,to:string}> $samples
      */
     private function translateInnerHtml(string $html, string $targetLangApi, array &$samples): string
     {
         $orig = $html;
         $resp = $this->deepl->translateHtml($html, $targetLangApi);
-        if ($resp['success'] !== true) {
+        if (true !== $resp['success']) {
             $this->log('[LeuchtfeuerTranslations][MJML] translateInnerHtml failed', ['error' => $resp['error'] ?? 'unknown']);
 
             return $orig;
@@ -169,12 +185,14 @@ class MjmlTranslateService
 
     /**
      * Subject / plain text helper (kept for subjects etc., no HTML).
+     *
+     * @param array<int, array{from:string,to:string}> $samples
      */
     public function translateRichText(string $text, string $targetLangApi, array &$samples = []): string
     {
         $orig = $text;
         $resp = $this->deepl->translate($text, $targetLangApi);
-        if ($resp['success'] !== true) {
+        if (true !== $resp['success']) {
             $this->log('[LeuchtfeuerTranslations][MJML] translateRichText failed', ['error' => $resp['error'] ?? 'unknown']);
 
             return $orig;
@@ -190,6 +208,8 @@ class MjmlTranslateService
     /**
      * Translate attribute values while preserving tokens/Twig exactly.
      * Splits text by token-like segments and only translates the non-token parts.
+     *
+     * @param array<int, array{from:string,to:string}> $samples
      */
     private function translateAttributePreserveTokens(string $value, string $targetLangApi, array &$samples): string
     {
@@ -205,7 +225,7 @@ class MjmlTranslateService
                 $out .= $p['value']; // keep as-is
             } else {
                 $resp = $this->deepl->translate($p['value'], $targetLangApi);
-                $out .= ($resp['success'] === true) ? ($resp['translation'] ?? $p['value']) : $p['value'];
+                $out .= (true === $resp['success']) ? ($resp['translation'] ?? $p['value']) : $p['value'];
             }
         }
 
@@ -235,7 +255,7 @@ class MjmlTranslateService
             if ('' === $c) {
                 continue;
             }
-            if (preg_match($re, $c)) {
+            if (1 === preg_match($re, $c)) {
                 $parts[] = ['type' => 'token', 'value' => $c];
             } else {
                 $parts[] = ['type' => 'text', 'value' => $c];
@@ -247,6 +267,13 @@ class MjmlTranslateService
 
     /**
      * LOCKED markers splitter (unchanged).
+     *
+     * @return array{
+     *   pairs:int,
+     *   unbalanced:bool,
+     *   sawAnyMarker:bool,
+     *   segments: array<int, array{type:'marker'|'text', text:string, locked?:bool}>
+     * }
      */
     private function splitByLockMarkers(string $s): array
     {
@@ -272,13 +299,13 @@ class MjmlTranslateService
                 continue;
             }
 
-            if (preg_match('/^<!--\s*LOCKED_START\s*-->$/i', $chunk)) {
+            if (1 === preg_match('/^<!--\s*LOCKED_START\s*-->$/i', $chunk)) {
                 $sawMarker  = true;
                 $segments[] = ['type' => 'marker', 'text' => $chunk];
                 $locked     = true;
                 continue;
             }
-            if (preg_match('/^<!--\s*LOCKED_END\s*-->$/i', $chunk)) {
+            if (1 === preg_match('/^<!--\s*LOCKED_END\s*-->$/i', $chunk)) {
                 $sawMarker  = true;
                 $segments[] = ['type' => 'marker', 'text' => $chunk];
                 if ($locked) {
@@ -302,19 +329,27 @@ class MjmlTranslateService
         ];
     }
 
+    /**
+     * @param array<string,string> &$blocks
+     */
     private function extractAndShieldMjRaw(string $mjml, array &$blocks): string
     {
-        return preg_replace_callback('/<mj-raw>(.*?)<\/mj-raw>/si', function ($m) use (&$blocks) {
+        $res = preg_replace_callback('/<mj-raw>(.*?)<\/mj-raw>/si', function ($m) use (&$blocks) {
             $key          = '__MJRAW_'.count($blocks).'__';
             $blocks[$key] = $m[0]; // entire block
 
             return $key;
         }, $mjml);
+
+        return is_string($res) ? $res : $mjml;
     }
 
+    /**
+     * @param array<string,string> $blocks
+     */
     private function unshieldMjRaw(string $mjml, array $blocks): string
     {
-        if (!$blocks) {
+        if ([] === $blocks) {
             return $mjml;
         }
         uksort($blocks, fn ($a, $b) => strlen($b) <=> strlen($a));
@@ -324,11 +359,15 @@ class MjmlTranslateService
 
     private function preview(string $s, int $len = 80): string
     {
-        $s = preg_replace('/\s+/', ' ', trim($s));
+        $tmp = preg_replace('/\s+/', ' ', trim($s));
+        $s   = is_string($tmp) ? $tmp : $s;
 
         return (mb_strlen($s) > $len) ? (mb_substr($s, 0, $len).'…') : $s;
     }
 
+    /**
+     * @param array<string, mixed> $ctx
+     */
     private function log(string $msg, array $ctx = []): void
     {
         $this->logger->info($msg, $ctx);

@@ -2,7 +2,7 @@
 
 namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Controller;
 
-use Mautic\CoreBundle\Controller\FormController;
+use Mautic\CoreBundle\Controller\AbstractFormController;
 use Mautic\CoreBundle\Security\Permissions\CorePermissions;
 use Mautic\EmailBundle\Entity\Email;
 use Mautic\EmailBundle\Model\EmailModel;
@@ -19,7 +19,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
-class EmailActionController extends FormController
+class EmailActionController extends AbstractFormController
 {
     public function translateAction(
         Request $request,
@@ -30,7 +30,7 @@ class EmailActionController extends FormController
         LoggerInterface $logger,
         CorePermissions $security,
         TranslatorInterface $translator,
-        FeatureGateService $featureGate
+        FeatureGateService $featureGate,
     ): Response {
         $logger->info('[LeuchtfeuerTranslations] translateAction start', [
             'objectId'   => $objectId,
@@ -85,7 +85,7 @@ class EmailActionController extends FormController
 
         $targetLangRaw = is_string($targetLangRaw) ? trim($targetLangRaw) : '';
 
-        if ($targetLangRaw === '') {
+        if ('' === $targetLangRaw) {
             return new JsonResponse(
                 [
                     'success' => false,
@@ -99,14 +99,17 @@ class EmailActionController extends FormController
         $targetLangApi = strtoupper($targetLangRaw);
         $targetLangIso = strtolower($targetLangApi);
 
-        $sourceLangGuess = strtolower($sourceEmail->getLanguage() ?: '');
-        $emailName       = $sourceEmail->getName() ?: '';
+        // Avoid casting mixed -> string
+        $langVal          = $sourceEmail->getLanguage();
+        $sourceLangGuess  = is_string($langVal) ? strtolower($langVal) : '';
+        $nameVal          = $sourceEmail->getName();
+        $emailName        = is_string($nameVal) ? $nameVal : '';
 
         // 1) Quick probe (do not leak probe details to client)
         $probe = $deepl->translate('Hello from Mautic', $targetLangApi);
-        if ($probe['success'] !== true) {
+        if (true !== $probe['success']) {
             $logger->error('[LeuchtfeuerTranslations] DeepL probe failed', [
-                'error'  => $probe['error'],
+                'error'  => (isset($probe['error']) ? (string) $probe['error'] : ''),
                 'host'   => $probe['host'],
                 'status' => $probe['status'],
             ]);
@@ -146,10 +149,10 @@ class EmailActionController extends FormController
             $clone->setVariantParent(null);
 
             // Name + target language suffix (rtrim not needed)
-            $clone->setName(($emailName !== '' ? $emailName : 'Email') . ' [' . $targetLangApi . ']');
+            $clone->setName(('' !== $emailName ? $emailName : 'Email').' ['.$targetLangApi.']');
 
             // IMPORTANT: Mautic expects lowercase language code
-            $clone->setLanguage($targetLangIso ?: $sourceLangGuess);
+            $clone->setLanguage(('' !== $targetLangIso) ? $targetLangIso : $sourceLangGuess);
 
             // Ensure HTML is not null (prevents PlainTextHelper error on /view)
             $sourceHtml = $sourceEmail->getCustomHtml();
@@ -163,7 +166,7 @@ class EmailActionController extends FormController
 
             // Ensure Doctrine assigned an ID (avoid casting null→0)
             $cloneId = $clone->getId();
-            if ($cloneId === null) {
+            if (null === $cloneId) {
                 $logger->error('[LeuchtfeuerTranslations] Clone persisted but ID is still null');
 
                 return new JsonResponse([
@@ -171,7 +174,7 @@ class EmailActionController extends FormController
                     'message' => $translator->trans('plugin.leuchtfeuertranslations.error.clone_persist_failed'),
                 ], Response::HTTP_INTERNAL_SERVER_ERROR);
             }
-            $cloneId = (int) $cloneId;
+            // No need to cast to int; Doctrine returns an int already.
         } catch (\Throwable $e) {
             $logger->error('[LeuchtfeuerTranslations] Clone (entity __clone) failed', ['ex' => $e->getMessage()]);
 
@@ -183,11 +186,11 @@ class EmailActionController extends FormController
 
         // 4) If we had MJML, write it to the clone via entity/repository (no raw SQL)
         $wroteMjml = false;
-        if ($mjml !== '') {
+        if ('' !== $mjml) {
             try {
                 /** @var GrapesJsBuilder|null $cloneGrapes */
                 $cloneGrapes = $grapesModel->getGrapesJsFromEmailId($cloneId);
-                if ($cloneGrapes === null) {
+                if (null === $cloneGrapes) {
                     $cloneGrapes = new GrapesJsBuilder();
                     $cloneGrapes->setEmail($clone);
                 }
@@ -212,9 +215,10 @@ class EmailActionController extends FormController
         $mj                = []; // ensure defined
 
         try {
-            // Subject
-            $origSubject = (string) $clone->getSubject();
-            if ($origSubject !== '') {
+            // Subject (avoid casting mixed -> string)
+            $subjectVal  = $clone->getSubject();
+            $origSubject = is_string($subjectVal) ? $subjectVal : '';
+            if ('' !== $origSubject) {
                 $translatedSubject = $mjmlService->translateRichText($origSubject, $targetLangApi, $samples);
                 if ($translatedSubject !== $origSubject) {
                     $clone->setSubject($translatedSubject);
@@ -222,13 +226,13 @@ class EmailActionController extends FormController
             }
 
             // MJML
-            if ($mjml !== '') {
+            if ('' !== $mjml) {
                 $mj             = $mjmlService->translateMjml($mjml, $targetLangApi);
                 $translatedMjml = $mj['mjml'];
 
                 /** @var GrapesJsBuilder|null $cloneGrapes */
                 $cloneGrapes = $grapesModel->getGrapesJsFromEmailId($cloneId);
-                if ($cloneGrapes === null) {
+                if (null === $cloneGrapes) {
                     $cloneGrapes = new GrapesJsBuilder();
                     $cloneGrapes->setEmail($clone);
                 }
@@ -238,11 +242,11 @@ class EmailActionController extends FormController
                 }
 
                 // Compile MJML → HTML and set as custom_html so preview reflects translation immediately
-                $compiled     = $mjmlCompiler->compile($translatedMjml, $clone->getTemplate());
-                $compileOk    = ($compiled['success'] ?? false) === true;
+                $compiled     = $mjmlCompiler->compile($translatedMjml);
+                $compileOk    = $compiled['success'];
                 $compiledHtml = isset($compiled['html']) && is_string($compiled['html']) ? $compiled['html'] : '';
 
-                if ($compileOk && $compiledHtml !== '') {
+                if ($compileOk && '' !== $compiledHtml) {
                     $clone->setCustomHtml($compiledHtml);
                 } else {
                     $logger->warning('[LeuchtfeuerTranslations] MJML compile failed; keeping existing custom_html', [
@@ -286,8 +290,8 @@ class EmailActionController extends FormController
                 ],
             ],
             'translation' => [
-                'subjectChanged' => ($translatedSubject !== null),
-                'mjmlChanged'    => ($translatedMjml !== null),
+                'subjectChanged' => (null !== $translatedSubject),
+                'mjmlChanged'    => (null !== $translatedMjml),
                 'samples'        => array_slice($samples, 0, 4),
                 'lockedMode'     => $lockedMode,
                 'lockedPairs'    => $lockedPairs,

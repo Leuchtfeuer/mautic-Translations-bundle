@@ -4,6 +4,7 @@ namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Integration;
 
 use Mautic\PluginBundle\Integration\AbstractIntegration;
 
+/** @phpstan-ignore-next-line */
 class LeuchtfeuerTranslationsIntegration extends AbstractIntegration
 {
     public const NAME = 'LeuchtfeuerTranslations'; // machine name
@@ -13,6 +14,7 @@ class LeuchtfeuerTranslationsIntegration extends AbstractIntegration
         return self::NAME;
     }
 
+    /** @return array<string,string> */
     public function getRequiredKeyFields(): array
     {
         return [

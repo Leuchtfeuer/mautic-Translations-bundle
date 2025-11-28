@@ -7,6 +7,7 @@ use GuzzleHttp\Exception\GuzzleException;
 use Mautic\PluginBundle\Helper\IntegrationHelper;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Integration\LeuchtfeuerTranslationsIntegration;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpFoundation\Response;
 
 class DeeplClientService
 {
@@ -17,13 +18,15 @@ class DeeplClientService
     public function __construct(
         private IntegrationHelper $integrationHelper,
         private LoggerInterface $logger,   // logger is always available
-        private Client $http               // use Guzzle instead of cURL
+        private Client $http,              // use Guzzle instead of cURL
     ) {
     }
 
     /**
      * Plain-text translation (no HTML handling).
      * $params can include DeepL options like formality, etc.
+     *
+     * @param array<string, string|int|bool|array<int,string>|null> $params
      *
      * @return array{
      *   success:bool,
@@ -46,6 +49,8 @@ class DeeplClientService
 
     /**
      * HTML-aware translation (DeepL tag_handling=html).
+     *
+     * @param array<string, string|int|bool|array<int,string>|null> $params
      *
      * @return array{
      *   success:bool,
@@ -71,6 +76,8 @@ class DeeplClientService
     /**
      * Detect plan by key and try free/pro host accordingly with 403 fallback.
      *
+     * @param array<string, string|int|bool|array<int,string>|null> $payload
+     *
      * @return array{
      *   success:bool,
      *   translation?:string,
@@ -81,11 +88,18 @@ class DeeplClientService
      */
     private function requestWithHostFailover(array $payload): array
     {
-        $integration = $this->integrationHelper->getIntegrationObject(LeuchtfeuerTranslationsIntegration::NAME);
-        $keys        = $integration ? $integration->getDecryptedApiKeys() : [];
-        $apiKey      = $keys['deepl_api_key'] ?? '';
+        $integrationObj = $this->integrationHelper->getIntegrationObject(LeuchtfeuerTranslationsIntegration::NAME);
 
-        if ($apiKey === '') {
+        if (false !== $integrationObj) {
+            /** @var array<string,string> $keys */
+            $keys = $integrationObj->getDecryptedApiKeys();
+        } else {
+            $keys = [];
+        }
+
+        $apiKey = isset($keys['deepl_api_key']) ? (string) $keys['deepl_api_key'] : '';
+
+        if ('' === $apiKey) {
             return [
                 'success' => false,
                 'error'   => 'API key not set',
@@ -105,7 +119,7 @@ class DeeplClientService
         ]);
 
         $first = $this->callDeepL($firstHost, $apiKey, $payload);
-        if (($first['status'] ?? null) !== 403) {
+        if (Response::HTTP_FORBIDDEN !== ($first['status'] ?? null)) {
             return $first;
         }
 
@@ -121,6 +135,8 @@ class DeeplClientService
     /**
      * Low-level HTTP request (Guzzle).
      * $payload is the full DeepL form body (we add auth_key here).
+     *
+     * @param array<string, string|int|bool|array<int,string>|null> $payload
      *
      * @return array{
      *   success:bool,
@@ -168,7 +184,7 @@ class DeeplClientService
             $json = null;
         }
 
-        if ($httpCode !== 200) {
+        if (Response::HTTP_OK !== $httpCode) {
             $msg = (is_array($json) && isset($json['message']))
                 ? (string) $json['message']
                 : ('HTTP error '.$httpCode);
@@ -200,6 +216,9 @@ class DeeplClientService
         ];
     }
 
+    /**
+     * @param array<string, mixed> $ctx
+     */
     private function log(string $msg, array $ctx = []): void
     {
         $this->logger->info($msg, $ctx);
