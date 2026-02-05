@@ -4,7 +4,7 @@ return [
     'name'        => 'Translations by Leuchtfeuer',
     'description' => 'AI-based translation of Mautic content e.g. emails',
     'author'      => 'Leuchtfeuer Digital Marketing GmbH',
-    'version'     => '0.1.0',
+    'version'     => '5.0.0',
 
     'routes' => [
         'main' => [
