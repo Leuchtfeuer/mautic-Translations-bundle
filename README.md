@@ -137,7 +137,7 @@ For everything else, email **[mautic-plugins@Leuchtfeuer.com](mailto:mautic-plug
 
 ## License
 
-This plugin is licensed under **GPL-3.0**. See the `LICENSE` file for details.
+This plugin is licensed under the GPL v3 License.
 
 ## Resources / Further Readings
 
