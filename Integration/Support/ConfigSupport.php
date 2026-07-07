@@ -18,5 +18,4 @@ class ConfigSupport extends LeuchtfeuerTranslationsIntegration implements Config
     {
         return AuthConfigType::class;
     }
-
 }

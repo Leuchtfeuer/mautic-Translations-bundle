@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Service;
 
 use GuzzleHttp\Client;
@@ -12,6 +14,7 @@ class DeeplClientService
 {
     /** DeepL endpoints */
     private const API_URL_FREE = 'https://api-free.deepl.com/v2/translate';
+
     private const API_URL_PRO  = 'https://api.deepl.com/v2/translate';
 
     public function __construct(
@@ -171,7 +174,7 @@ class DeeplClientService
         $json = null;
         try {
             $json = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
-        } catch (\JsonException $e) {
+        } catch (\JsonException) {
             // If non-200 and body is not valid JSON, we still want to surface HTTP error below.
             $json = null;
         }

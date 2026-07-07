@@ -13,6 +13,7 @@ class LeuchtfeuerTranslationsIntegration extends BasicIntegration implements Bas
     use ConfigurationTrait;
 
     public const NAME         = 'LeuchtfeuerTranslations';
+
     public const DISPLAY_NAME = 'Translations by Leuchtfeuer';
 
     public function getName(): string

@@ -76,7 +76,6 @@
             { code: 'ZH-HANT', name: 'Chinese (Traditional)' },
         ];
 
-    // ---- Test button injection for IntegrationsBundle config modal ----
     function lfInjectTestButton() {
         // Detect our integration's config form by the deepl_api_key field
         var apiKeyInput = document.querySelector('input[name*="deepl_api_key"]');

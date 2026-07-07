@@ -1,93 +1,79 @@
 {
-  "name": "leuchtfeuer/mautic-translations-bundle",
-  "description": "AI-based translation of Mautic content e.g. emails",
-  "type": "mautic-plugin",
-  "license": "GPL-3.0",
-  "authors": [
-    {
-      "name": "Leuchtfeuer Digital Marketing GmbH",
-      "email": "mautic-plugins@Leuchtfeuer.com"
-    }
-  ],
-  "homepage": "https://www.leuchtfeuer.com",
-  "minimum-stability": "dev",
-  "prefer-stable": true,
-
-  "require": {
-    "php": "^8.1",
-    "ext-json": "*",
-    "mautic/core-lib": "^7.0",
-    "mautic/grapes-js-builder-bundle": "^7.0"
-  },
-
-  "require-dev": {
-    "friendsofphp/php-cs-fixer": "^3.14",
-    "symfony/browser-kit": "~7.4.0",
-    "phpstan/phpstan": "^1.12",
-    "phpstan/phpstan-deprecation-rules": "^1.1",
-    "phpstan/phpstan-phpunit": "^1.4",
-    "phpstan/phpstan-strict-rules": "^1.5",
-    "rector/rector": "^1.2"
-  },
-
-  "extra": {
-    "install-directory-name": "LeuchtfeuerTranslationsBundle"
-  },
-
-  "autoload": {
-    "psr-4": {
-      "MauticPlugin\\LeuchtfeuerTranslationsBundle\\": ""
-    }
-  },
-
-  "repositories": [
-    {
-      "type": "git",
-      "url": "https://github.com/mautic/FOSOAuthServerBundle.git"
+    "name": "leuchtfeuer/mautic-translations-bundle",
+    "description": "AI-based translation of Mautic content e.g. emails",
+    "license": "GPL-3.0",
+    "type": "mautic-plugin",
+    "homepage": "https://www.Leuchtfeuer.com",
+    "authors": [
+        {
+            "name": "Leuchtfeuer Digital Marketing GmbH",
+            "email": "mautic-plugins@Leuchtfeuer.com",
+            "homepage": "https://Leuchtfeuer.com/mautic/",
+            "role": "Developer"
+        }
+    ],
+    "keywords": ["mautic", "plugin", "integration"],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "require": {
+        "php": "^8.2",
+        "ext-json": "*",
+        "mautic/core-lib": "^7.0",
+        "mautic/grapes-js-builder-bundle": "^7.0"
     },
-    {
-      "type": "git",
-      "url": "https://github.com/mautic/BazingaOAuthServerBundle.git"
+    "require-dev": {
+        "phpunit/phpunit": "^9.5",
+        "friendsofphp/php-cs-fixer": "^3.14",
+        "symfony/browser-kit": "~7.4.0",
+        "phpstan/phpstan": "^1.12",
+        "phpstan/phpstan-deprecation-rules": "^1.1",
+        "phpstan/phpstan-phpunit": "^1.4",
+        "phpstan/phpstan-strict-rules": "^1.5",
+        "rector/rector": "^1.2"
     },
-    {
-      "type": "git",
-      "url": "https://github.com/mautic/SpBundle.git",
-      "canonical": false
+    "extra": {
+        "install-directory-name": "LeuchtfeuerTranslationsBundle"
     },
-    {
-      "type": "git",
-      "url": "https://github.com/mautic/SymfonyBridgeBundle.git",
-      "canonical": false
+    "autoload": {
+        "psr-4": {
+            "MauticPlugin\\LeuchtfeuerTranslationsBundle\\": ""
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "MauticPlugin\\LeuchtfeuerTranslationsBundle\\Tests\\": "Tests"
+        }
+    },
+    "scripts": {
+        "cs-fix": "./vendor/bin/php-cs-fixer fix --config .php-cs-fixer.php --using-cache no --show-progress dots -v"
+    },
+    "config": {
+        "allow-plugins": {
+            "symfony/flex": true
+        },
+        "audit": {
+            "ignore": [
+                "PKSA-5x9t-bkbj-vmgp",
+                "PKSA-64jn-3d9t-gncx",
+                "PKSA-8b16-mcgz-h4cz",
+                "PKSA-s99r-9yxm-hjvt",
+                "PKSA-4ckb-wpj6-c29d",
+                "PKSA-nm34-xhtz-ww9p",
+                "PKSA-7jd6-nb49-bz4v",
+                "PKSA-jw5c-q9nd-tzj9",
+                "PKSA-285y-y5bt-kvd9",
+                "PKSA-ybqb-vyrq-8pdt",
+                "PKSA-bcnb-9tc9-bjb8",
+                "PKSA-dbrb-pvhs-h3st",
+                "PKSA-gst3-cdk3-bpqt",
+                "PKSA-xk3k-rd1m-pxmg",
+                "PKSA-7f9v-sb8k-krfb",
+                "PKSA-p1pj-q951-6f1x",
+                "PKSA-mkg2-1wyw-57y7",
+                "PKSA-dvbq-8ft2-ngrw",
+                "PKSA-m4hk-rk8p-4t5p",
+                "PKSA-xp7t-fbrb-qjv4"
+            ]
+        }
     }
-  ],
-
-  "config": {
-    "allow-plugins": {
-      "symfony/flex": true
-    },
-    "audit": {
-      "ignore": [
-        "PKSA-5x9t-bkbj-vmgp",
-        "PKSA-64jn-3d9t-gncx",
-        "PKSA-8b16-mcgz-h4cz",
-        "PKSA-s99r-9yxm-hjvt",
-        "PKSA-4ckb-wpj6-c29d",
-        "PKSA-nm34-xhtz-ww9p",
-        "PKSA-7jd6-nb49-bz4v",
-        "PKSA-jw5c-q9nd-tzj9",
-        "PKSA-285y-y5bt-kvd9",
-        "PKSA-ybqb-vyrq-8pdt",
-        "PKSA-bcnb-9tc9-bjb8",
-        "PKSA-dbrb-pvhs-h3st",
-        "PKSA-gst3-cdk3-bpqt",
-        "PKSA-xk3k-rd1m-pxmg",
-        "PKSA-7f9v-sb8k-krfb",
-        "PKSA-p1pj-q951-6f1x",
-        "PKSA-mkg2-1wyw-57y7",
-        "PKSA-dvbq-8ft2-ngrw",
-        "PKSA-m4hk-rk8p-4t5p",
-        "PKSA-xp7t-fbrb-qjv4"
-      ]
-    }
-  }
 }

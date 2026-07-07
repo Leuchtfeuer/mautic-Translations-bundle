@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Service;
 
 use Psr\Log\LoggerInterface;
@@ -8,7 +10,7 @@ class MjmlTranslateService
 {
     public function __construct(
         private DeeplClientService $deepl,
-        private LoggerInterface $logger, // logger is always available
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -352,7 +354,7 @@ class MjmlTranslateService
         if ([] === $blocks) {
             return $mjml;
         }
-        uksort($blocks, fn ($a, $b) => strlen($b) <=> strlen($a));
+        uksort($blocks, fn ($a, $b): int => strlen($b) <=> strlen($a));
 
         return strtr($mjml, $blocks);
     }

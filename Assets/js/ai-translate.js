@@ -32,10 +32,8 @@
         { code: 'ES', name: 'Spanish' },
     ];
 
-    // --- Bootstrap modal (preferred) ---
-    async function openLanguagePickerBootstrap(defaultCode) {
+    async function openLanguagePicker(defaultCode) {
         const $ = win.mQuery || win.jQuery;
-        if (!$ || !$.fn || !$.fn.modal) return null; // Bootstrap not available
 
         // Create modal once
         let $modal = $('#lf-translations-modal');
@@ -92,7 +90,6 @@
             let selection = null;
 
             function onHidden() {
-                // Resolve with whatever was chosen (null if dismissed)
                 $('#lf-translations-ok').off('click', onOk);
                 $modal.off('hidden.bs.modal', onHidden);
                 resolve(selection);
@@ -105,122 +102,14 @@
                     return;
                 }
                 selection = code;
-                // Trigger hide; resolution happens in onHidden
                 $modal.modal('hide');
             }
 
-            // Important: resolve only via hidden.bs.modal
             $modal.one('hidden.bs.modal', onHidden);
             $('#lf-translations-ok').on('click', onOk);
 
             $modal.modal('show');
         });
-    }
-
-
-    // --- Plain overlay fallback (if Bootstrap not present) ---
-    async function openLanguagePickerFallback(defaultCode) {
-        let langs = await waitForLangs(700);
-        if (!langs.length) langs = FALLBACK_LANGS;
-
-        const I18N = getI18N();
-        return new Promise(function (resolve) {
-            const overlay = doc.createElement('div');
-            overlay.style.position = 'fixed';
-            overlay.style.inset = '0';
-            overlay.style.background = 'rgba(0,0,0,0.4)';
-            overlay.style.zIndex = '9999';
-            overlay.addEventListener('click', (ev) => {
-                if (ev.target === overlay) cleanup(null);
-            });
-
-            const modal = doc.createElement('div');
-            modal.style.position = 'absolute';
-            modal.style.top = '50%';
-            modal.style.left = '50%';
-            modal.style.transform = 'translate(-50%, -50%)';
-            modal.style.background = '#fff';
-            modal.style.padding = '16px';
-            modal.style.borderRadius = '8px';
-            modal.style.boxShadow = '0 10px 30px rgba(0,0,0,0.2)';
-            modal.style.width = '420px';
-            modal.style.maxWidth = '90%';
-            modal.setAttribute('role', 'dialog');
-            modal.setAttribute('aria-modal', 'true');
-            overlay.appendChild(modal);
-
-            const title = doc.createElement('h3');
-            title.textContent = I18N.choose_target_language || 'Choose target language';
-            title.style.marginTop = '0';
-            modal.appendChild(title);
-
-            const select = doc.createElement('select');
-            select.id = 'lf-translations-select';
-            select.style.width = '100%';
-            select.style.margin = '8px 0';
-
-            const def = String(defaultCode || 'DE').toUpperCase();
-            langs.forEach((l) => {
-                const code = (l && l.code) ? String(l.code) : '';
-                const name = (l && l.name) ? String(l.name) : code;
-                if (!code) return;
-                const opt = doc.createElement('option');
-                opt.value = code;
-                opt.textContent = name + ' (' + code + ')';
-                if (def === code.toUpperCase()) opt.selected = true;
-                select.appendChild(opt);
-            });
-            modal.appendChild(select);
-
-            const actions = doc.createElement('div');
-            actions.style.display = 'flex';
-            actions.style.justifyContent = 'flex-end';
-            actions.style.gap = '8px';
-            actions.style.marginTop = '12px';
-            const cancelBtn = doc.createElement('button');
-            cancelBtn.type = 'button';
-            cancelBtn.textContent = I18N.cancel || 'Cancel';
-            const okBtn = doc.createElement('button');
-            okBtn.type = 'button';
-            okBtn.textContent = I18N.translate || 'Translate';
-            okBtn.className = 'btn btn-primary';
-            actions.appendChild(cancelBtn);
-            actions.appendChild(okBtn);
-            modal.appendChild(actions);
-
-            function choose() {
-                const code = (select.value || '').trim().toUpperCase();
-                if (!code) {
-                    alert(I18N.please_choose_language || 'Please choose a language.');
-                    return;
-                }
-                cleanup(code);
-            }
-
-            function cleanup(result) {
-                doc.removeEventListener('keydown', onKey);
-                overlay.remove();
-                resolve(result);
-            }
-
-            function onKey(ev) {
-                if (ev.key === 'Escape') cleanup(null);
-                if (ev.key === 'Enter') choose();
-            }
-
-            cancelBtn.addEventListener('click', () => cleanup(null));
-            okBtn.addEventListener('click', choose);
-            doc.addEventListener('keydown', onKey);
-
-            doc.body.appendChild(overlay);
-            select.focus();
-        });
-    }
-
-    // Unified picker
-    function openLanguagePicker(defaultCode) {
-        const maybe = openLanguagePickerBootstrap(defaultCode);
-        return maybe || openLanguagePickerFallback(defaultCode);
     }
 
     NS.openDialog = function (ev) {
@@ -290,7 +179,7 @@
 
     // Delegated click hook
     doc.addEventListener('click', function (ev) {
-        const el = ev.target.closest('[data-lf-translate="1"], #ai-translate-dropdown');
+        const el = ev.target.closest('[data-lf-translate="1"]');
         if (!el) return;
         NS.openDialog(ev);
     });
