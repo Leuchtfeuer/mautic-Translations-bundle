@@ -1,9 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MauticPlugin\LeuchtfeuerTranslationsBundle;
 
-use Mautic\PluginBundle\Bundle\PluginBundleBase;
+use Mautic\IntegrationsBundle\Bundle\AbstractPluginBundle;
 
-class LeuchtfeuerTranslationsBundle extends PluginBundleBase
+class LeuchtfeuerTranslationsBundle extends AbstractPluginBundle
 {
 }

@@ -4,7 +4,7 @@ namespace MauticPlugin\LeuchtfeuerTranslationsBundle\EventListener;
 
 use Mautic\CoreBundle\CoreEvents;
 use Mautic\CoreBundle\Event\CustomButtonEvent;
-use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\FeatureGateService;
+use MauticPlugin\LeuchtfeuerTranslationsBundle\Integration\Config;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
@@ -14,7 +14,7 @@ class ButtonSubscriber implements EventSubscriberInterface
     public function __construct(
         private LoggerInterface $logger,
         private TranslatorInterface $translator,
-        private FeatureGateService $featureGate,
+        private Config $config,
     ) {
     }
 
@@ -34,9 +34,7 @@ class ButtonSubscriber implements EventSubscriberInterface
             return;
         }
 
-        // Respect plugin toggle (Published switch in Plugins UI)
-        if (!$this->featureGate->isEnabled()) {
-            // $this->logger->info('[LeuchtfeuerTranslations] skipped button: integration disabled');
+        if (!$this->config->isPublished()) {
             return;
         }
 
@@ -58,11 +56,10 @@ class ButtonSubscriber implements EventSubscriberInterface
             'priority'  => 0.5,   // ordering within dropdown
         ];
 
-        // Only on /s/emails/view/{id}
-        $routeFilter = ['mautic_email_action', ['objectAction' => 'view']];
+        if (!$event->checkRouteContext(['mautic_email_action', ['objectAction' => 'view']])) {
+            return;
+        }
 
-        $event->addButton($dropdownItem, 'page_actions', $routeFilter);
-
-        $this->logger->info('[LeuchtfeuerTranslations] dropdown item added', ['location' => $loc]);
+        $event->addButton($dropdownItem, 'page_actions');
     }
 }

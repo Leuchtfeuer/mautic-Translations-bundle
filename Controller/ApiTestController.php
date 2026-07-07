@@ -18,15 +18,8 @@ class ApiTestController extends AbstractController
         $result = $deepl->translate('Hello', 'DE');
 
         $isSuccess = (true === $result['success']);
+        $message   = $isSuccess ? 'Success' : ($result['error'] ?? 'Unknown error');
 
-        if ($isSuccess) {
-            $translation = $result['translation'] ?? '';
-            $message     = sprintf('Success! "Hello" → "%s"', $translation);
-        } else {
-            $error   = $result['error'] ?? 'Unknown error';
-            $message = sprintf('Error: %s', $error);
-        }
-
-        return new JsonResponse(['message' => $message]);
+        return new JsonResponse(['success' => $isSuccess, 'message' => $message]);
     }
 }

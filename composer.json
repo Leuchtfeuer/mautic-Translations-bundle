@@ -16,13 +16,13 @@
   "require": {
     "php": "^8.1",
     "ext-json": "*",
-    "mautic/core-lib": "^5.0",
-    "mautic/grapes-js-builder-bundle": "^5.0"
+    "mautic/core-lib": "^7.0",
+    "mautic/grapes-js-builder-bundle": "^7.0"
   },
 
   "require-dev": {
     "friendsofphp/php-cs-fixer": "^3.14",
-    "symfony/browser-kit": "^5.4",
+    "symfony/browser-kit": "~7.4.0",
     "phpstan/phpstan": "^1.12",
     "phpstan/phpstan-deprecation-rules": "^1.1",
     "phpstan/phpstan-phpunit": "^1.4",

@@ -8,8 +8,8 @@ use Mautic\EmailBundle\Entity\Email;
 use Mautic\EmailBundle\Model\EmailModel;
 use MauticPlugin\GrapesJsBuilderBundle\Entity\GrapesJsBuilder;
 use MauticPlugin\GrapesJsBuilderBundle\Model\GrapesJsBuilderModel;
+use MauticPlugin\LeuchtfeuerTranslationsBundle\Integration\Config;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\DeeplClientService;
-use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\FeatureGateService;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlCompileService;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlTranslateService;
 use Psr\Log\LoggerInterface;
@@ -30,7 +30,7 @@ class EmailActionController extends AbstractFormController
         LoggerInterface $logger,
         CorePermissions $security,
         TranslatorInterface $translator,
-        FeatureGateService $featureGate,
+        Config $config,
     ): Response {
         $logger->info('[LeuchtfeuerTranslations] translateAction start', [
             'objectId'   => $objectId,
@@ -38,7 +38,7 @@ class EmailActionController extends AbstractFormController
         ]);
 
         // Respect plugin toggle (Published switch in Plugins UI)
-        if (!$featureGate->isEnabled()) {
+        if (!$config->isPublished()) {
             $logger->info('[LeuchtfeuerTranslations] translateAction blocked: integration disabled');
 
             return new JsonResponse(
@@ -147,6 +147,7 @@ class EmailActionController extends AbstractFormController
             $clone->setIsPublished(false);
             $clone->setEmailType($emailType);
             $clone->setVariantParent(null);
+            $clone->setContent([]);
 
             // Name + target language suffix (rtrim not needed)
             $clone->setName(('' !== $emailName ? $emailName : 'Email').' ['.$targetLangApi.']');

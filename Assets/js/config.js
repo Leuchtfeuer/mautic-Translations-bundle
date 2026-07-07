@@ -18,6 +18,7 @@
                 'Next step:\nOpen the Email Builder, review the translated content, and click Save.',
             please_choose_language: 'Please choose a language.',
             unexpected_error: 'Unexpected error, check console.',
+            test_api_connection: 'Test API Connection',
         },
         NS.I18N || {}
     );
@@ -75,45 +76,68 @@
             { code: 'ZH-HANT', name: 'Chinese (Traditional)' },
         ];
 
-    // ---- Preserve your existing "Test Deepl API" button behavior ----
-    document.addEventListener('DOMContentLoaded', function () {
-        var btn = document.getElementById('test-deepl-api');
-        if (!btn) return;
+    // ---- Test button injection for IntegrationsBundle config modal ----
+    function lfInjectTestButton() {
+        // Detect our integration's config form by the deepl_api_key field
+        var apiKeyInput = document.querySelector('input[name*="deepl_api_key"]');
+        if (!apiKeyInput) return;
 
-        btn.addEventListener('click', function () {
+        // Don't inject twice
+        if (document.getElementById('lf-test-deepl-btn')) return;
+
+        var formGroup = apiKeyInput.closest('.form-group') || apiKeyInput.parentNode;
+
+        var inputCol = apiKeyInput.closest('[class*="col-"]') || formGroup;
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = 'lf-test-deepl-btn';
+        btn.className = 'btn btn-default mt-xs';
+        btn.textContent = NS.I18N.test_api_connection || 'Test API Connection';
+
+        var resultSpan = document.createElement('span');
+        resultSpan.id = 'lf-test-deepl-result';
+        resultSpan.className = 'help-block';
+
+        inputCol.appendChild(btn);
+        inputCol.appendChild(resultSpan);
+
+        document.getElementById('lf-test-deepl-btn').addEventListener('click', function () {
+            var btn = this;
+            var result = document.getElementById('lf-test-deepl-result');
             btn.disabled = true;
-            var result = document.getElementById('deepl-api-test-result');
-            result.innerText = 'Testing...';
+            result.className = 'help-block';
+            result.textContent = '…';
 
-            // Get CSRF token rendered by Mautic
             var csrf = (typeof mauticAjaxCsrf !== 'undefined' && mauticAjaxCsrf) || '';
-            if (!csrf) {
-                result.innerText = 'Missing CSRF token';
-                btn.disabled = false;
-                return;
-            }
-
             fetch('/s/plugin/ai-translate/test-api', {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: {
-                    'X-CSRF-Token': csrf,
                     'X-Requested-With': 'XMLHttpRequest',
-                    Accept: 'application/json',
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'X-CSRF-Token': csrf,
                 },
-                body: '', // no body required
             })
-                .then((r) => r.json())
-                .then((data) => {
-                    result.innerText = data.message;
-                    btn.disabled = false;
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    result.className = 'help-block ' + (d.success ? 'text-success' : 'text-danger');
+                    result.textContent = d.message || (d.success ? 'Success' : 'Failed');
                 })
-                .catch((e) => {
-                    console.error('LeuchtfeuerTranslations test-api error:', e);
-                    result.innerText = 'Request failed';
-                    btn.disabled = false;
-                });
+                .catch(function () {
+                    result.className = 'help-block text-danger';
+                    result.textContent = 'Request failed.';
+                })
+                .finally(function () { btn.disabled = false; });
         });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        lfInjectTestButton();
+
+        // Also run after every Mautic AJAX load (modal/panel)
+        var $ = win.mQuery || win.jQuery;
+        if ($) {
+            $(document).on('ajaxComplete', function () { lfInjectTestButton(); });
+        }
     });
 })(window);

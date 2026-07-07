@@ -4,8 +4,7 @@ namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Service;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
-use Mautic\PluginBundle\Helper\IntegrationHelper;
-use MauticPlugin\LeuchtfeuerTranslationsBundle\Integration\LeuchtfeuerTranslationsIntegration;
+use MauticPlugin\LeuchtfeuerTranslationsBundle\Integration\Config;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -16,9 +15,9 @@ class DeeplClientService
     private const API_URL_PRO  = 'https://api.deepl.com/v2/translate';
 
     public function __construct(
-        private IntegrationHelper $integrationHelper,
-        private LoggerInterface $logger,   // logger is always available
-        private Client $http,              // use Guzzle instead of cURL
+        private Config $config,
+        private LoggerInterface $logger,
+        private Client $http,
     ) {
     }
 
@@ -88,16 +87,8 @@ class DeeplClientService
      */
     private function requestWithHostFailover(array $payload): array
     {
-        $integrationObj = $this->integrationHelper->getIntegrationObject(LeuchtfeuerTranslationsIntegration::NAME);
-
-        if (false !== $integrationObj) {
-            /** @var array<string,string> $keys */
-            $keys = $integrationObj->getDecryptedApiKeys();
-        } else {
-            $keys = [];
-        }
-
-        $apiKey = isset($keys['deepl_api_key']) ? (string) $keys['deepl_api_key'] : '';
+        $keys   = $this->config->getDecryptedApiKeys();
+        $apiKey = (string) ($keys['deepl_api_key'] ?? '');
 
         if ('' === $apiKey) {
             return [
@@ -148,12 +139,13 @@ class DeeplClientService
      */
     private function callDeepL(string $host, string $apiKey, array $payload): array
     {
-        $data = array_merge(['auth_key' => $apiKey], $payload);
-
         try {
             $resp     = $this->http->request('POST', $host, [
-                'headers'     => ['Accept' => 'application/json'],
-                'form_params' => $data,
+                'headers'     => [
+                    'Accept'        => 'application/json',
+                    'Authorization' => 'DeepL-Auth-Key '.$apiKey,
+                ],
+                'form_params' => $payload,
             ]);
             $httpCode = $resp->getStatusCode();
             $body     = (string) $resp->getBody();
