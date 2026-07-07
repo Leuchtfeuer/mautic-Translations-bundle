@@ -18,7 +18,7 @@
                 'Next step:\nOpen the Email Builder, review the translated content, and click Save.',
             please_choose_language: 'Please choose a language.',
             unexpected_error: 'Unexpected error, check console.',
-            test_api_connection: 'Test API Connection',
+            test_api_connection: 'Test DeepL API',
         },
         NS.I18N || {}
     );
@@ -86,20 +86,29 @@
 
         var formGroup = apiKeyInput.closest('.form-group') || apiKeyInput.parentNode;
 
-        var inputCol = apiKeyInput.closest('[class*="col-"]') || formGroup;
-
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.id = 'lf-test-deepl-btn';
-        btn.className = 'btn btn-default mt-xs';
-        btn.textContent = NS.I18N.test_api_connection || 'Test API Connection';
+        btn.className = 'btn btn-secondary btn-nospin';
+        var btnSpan = document.createElement('span');
+        btnSpan.textContent = NS.I18N.test_api_connection || 'Test DeepL API';
+        btn.appendChild(btnSpan);
 
         var resultSpan = document.createElement('span');
         resultSpan.id = 'lf-test-deepl-result';
         resultSpan.className = 'help-block';
 
-        inputCol.appendChild(btn);
-        inputCol.appendChild(resultSpan);
+        var col = document.createElement('div');
+        col.className = 'col-xs-12';
+        col.style.paddingTop = '8px';
+        col.appendChild(btn);
+        col.appendChild(resultSpan);
+
+        var row = document.createElement('div');
+        row.className = 'row';
+        row.appendChild(col);
+
+        formGroup.insertAdjacentElement('afterend', row);
 
         document.getElementById('lf-test-deepl-btn').addEventListener('click', function () {
             var btn = this;
