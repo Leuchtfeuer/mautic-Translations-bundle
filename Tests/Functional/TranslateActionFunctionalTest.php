@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Tests\Functional;
 
+use Mautic\CoreBundle\Test\Container\TestContainer;
 use Mautic\CoreBundle\Test\MauticMysqlTestCase;
 use Mautic\EmailBundle\Entity\Email;
 use Mautic\PluginBundle\Entity\Integration;
@@ -27,14 +28,20 @@ class TranslateActionFunctionalTest extends MauticMysqlTestCase
         parent::setUp();
 
         $this->deeplMock = $this->createMock(DeeplClientService::class);
-        static::getContainer()->set(DeeplClientService::class, $this->deeplMock);
+
+        $testContainer = static::getContainer();
+        if ($testContainer instanceof TestContainer) {
+            $testContainer->setPublicContainer(static::$kernel->getContainer());
+        }
+
+        $testContainer->set(DeeplClientService::class, $this->deeplMock);
 
         $this->createIntegration(published: true);
     }
 
     public function testHappyPathClonesEmailAndTranslatesSubject(): void
     {
-        $email = $this->createEmail('Welcome Email', 'Hello World');
+        $email   = $this->createEmail('Welcome Email', 'Hello World');
         $emailId = $email->getId();
 
         // Probe + subject translation both go through translate()

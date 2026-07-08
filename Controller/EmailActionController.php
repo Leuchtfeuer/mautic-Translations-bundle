@@ -93,7 +93,7 @@ class EmailActionController extends AbstractFormController
             return $this->errorJson($translator, 'plugin.leuchtfeuertranslations.error.clone_persist_failed', Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
-        $wroteMjml  = $this->saveMjmlToClone($cloneId, $clone, $mjml, $grapesModel, $logger);
+        $wroteMjml   = $this->saveMjmlToClone($cloneId, $clone, $mjml, $grapesModel, $logger);
         $translation = $this->translateAndCompile($clone, $cloneId, $mjml, $targetLangApi, $mjmlService, $mjmlCompiler, $grapesModel, $model, $logger);
 
         $logger->info('[LeuchtfeuerTranslations] translateAction finished', [
