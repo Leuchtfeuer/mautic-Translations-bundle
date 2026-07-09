@@ -93,8 +93,13 @@ class EmailActionController extends AbstractFormController
             return $this->errorJson($translator, 'plugin.leuchtfeuertranslations.error.clone_persist_failed', Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
-        $wroteMjml   = $this->saveMjmlToClone($cloneId, $clone, $mjml, $grapesModel, $logger);
-        $translation = $this->translateAndCompile($clone, $cloneId, $mjml, $targetLangApi, $mjmlService, $mjmlCompiler, $grapesModel, $model, $logger);
+        $wroteMjml = $this->saveMjmlToClone($cloneId, $clone, $mjml, $grapesModel, $logger);
+
+        try {
+            $translation = $this->translateAndCompile($clone, $cloneId, $mjml, $targetLangApi, $mjmlService, $mjmlCompiler, $grapesModel, $model, $logger);
+        } catch (\Throwable $e) {
+            return $this->errorJson($translator, 'plugin.leuchtfeuertranslations.error.translation_failed', Response::HTTP_INTERNAL_SERVER_ERROR, ['%error%' => $e->getMessage()]);
+        }
 
         $logger->info('[LeuchtfeuerTranslations] translateAction finished', [
             'cloneId' => $cloneId,
@@ -229,6 +234,7 @@ class EmailActionController extends AbstractFormController
             $model->saveEntity($clone);
         } catch (\Throwable $e) {
             $logger->error('[LeuchtfeuerTranslations] Translation / compile step failed', ['cloneId' => $cloneId, 'ex' => $e->getMessage()]);
+            throw $e;
         }
 
         return [
