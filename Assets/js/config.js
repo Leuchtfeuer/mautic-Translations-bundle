@@ -76,76 +76,37 @@
             { code: 'ZH-HANT', name: 'Chinese (Traditional)' },
         ];
 
-    function lfInjectTestButton() {
-        // Detect our integration's config form by the deepl_api_key field
-        var apiKeyInput = document.querySelector('input[name*="deepl_api_key"]');
-        if (!apiKeyInput) return;
+    NS.testApiConnection = function (btn) {
+        btn.disabled = true;
 
-        // Don't inject twice
-        if (document.getElementById('lf-test-deepl-btn')) return;
-
-        var formGroup = apiKeyInput.closest('.form-group') || apiKeyInput.parentNode;
-
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.id = 'lf-test-deepl-btn';
-        btn.className = 'btn btn-secondary btn-nospin';
-        var btnSpan = document.createElement('span');
-        btnSpan.textContent = NS.I18N.test_api_connection || 'Test DeepL API';
-        btn.appendChild(btnSpan);
-
-        var resultSpan = document.createElement('span');
-        resultSpan.id = 'lf-test-deepl-result';
-        resultSpan.className = 'help-block';
-
-        var col = document.createElement('div');
-        col.className = 'col-xs-12';
-        col.style.paddingTop = '8px';
-        col.appendChild(btn);
-        col.appendChild(resultSpan);
-
-        var row = document.createElement('div');
-        row.className = 'row';
-        row.appendChild(col);
-
-        formGroup.insertAdjacentElement('afterend', row);
-
-        document.getElementById('lf-test-deepl-btn').addEventListener('click', function () {
-            var btn = this;
-            var result = document.getElementById('lf-test-deepl-result');
-            btn.disabled = true;
-            result.className = 'help-block';
-            result.textContent = '…';
-
-            var csrf = (typeof mauticAjaxCsrf !== 'undefined' && mauticAjaxCsrf) || '';
-            fetch('/s/plugin/ai-translate/test-api', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-Token': csrf,
-                },
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (d) {
-                    result.className = 'help-block ' + (d.success ? 'text-success' : 'text-danger');
-                    result.textContent = d.message || (d.success ? 'Success' : 'Failed');
-                })
-                .catch(function () {
-                    result.className = 'help-block text-danger';
-                    result.textContent = 'Request failed.';
-                })
-                .finally(function () { btn.disabled = false; });
-        });
-    }
-
-    document.addEventListener('DOMContentLoaded', function () {
-        lfInjectTestButton();
-
-        // Also run after every Mautic AJAX load (modal/panel)
-        var $ = win.mQuery || win.jQuery;
-        if ($) {
-            $(document).on('ajaxComplete', function () { lfInjectTestButton(); });
+        // Lazy-inject a result span after the button (once)
+        var result = btn.nextElementSibling;
+        if (!result || !result.classList.contains('lf-test-result')) {
+            result = document.createElement('span');
+            result.className = 'lf-test-result help-block';
+            btn.insertAdjacentElement('afterend', result);
         }
-    });
+        result.className = 'lf-test-result help-block';
+        result.textContent = '…';
+
+        var csrf = (typeof mauticAjaxCsrf !== 'undefined' && mauticAjaxCsrf) || '';
+        fetch('/s/plugin/ai-translate/test-api', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-Token': csrf,
+            },
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                result.className = 'lf-test-result help-block ' + (d.success ? 'text-success' : 'text-danger');
+                result.textContent = d.message || (d.success ? 'Success' : 'Failed');
+            })
+            .catch(function () {
+                result.className = 'lf-test-result help-block text-danger';
+                result.textContent = 'Request failed.';
+            })
+            .finally(function () { btn.disabled = false; });
+    };
 })(window);
