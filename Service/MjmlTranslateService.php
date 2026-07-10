@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Service;
 
 use Psr\Log\LoggerInterface;
@@ -8,7 +10,7 @@ class MjmlTranslateService
 {
     public function __construct(
         private DeeplClientService $deepl,
-        private LoggerInterface $logger, // logger is always available
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -106,7 +108,7 @@ class MjmlTranslateService
         $frag      = $this->extractAndShieldMjRaw($frag, $rawBlocks);
 
         // <mj-preview>…</mj-preview>
-        $tmp = preg_replace_callback('/<mj-preview>(.*?)<\/mj-preview>/si', function ($m) use ($targetLangApi, &$samples) {
+        $tmp = preg_replace_callback('/<mj-preview>(.*?)<\/mj-preview>/si', function ($m) use ($targetLangApi, &$samples): string {
             $translated = $this->translateInnerHtml($m[1], $targetLangApi, $samples);
 
             return '<mj-preview>'.$translated.'</mj-preview>';
@@ -114,7 +116,7 @@ class MjmlTranslateService
         $frag = is_string($tmp) ? $tmp : $frag;
 
         // <mj-text>…</mj-text>
-        $tmp = preg_replace_callback('/<mj-text\b[^>]*>(.*?)<\/mj-text>/si', function ($m) use ($targetLangApi, &$samples) {
+        $tmp = preg_replace_callback('/<mj-text\b[^>]*>(.*?)<\/mj-text>/si', function ($m) use ($targetLangApi, &$samples): string {
             $translated = $this->translateInnerHtml($m[1], $targetLangApi, $samples);
 
             return str_replace($m[1], $translated, $m[0]);
@@ -122,7 +124,7 @@ class MjmlTranslateService
         $frag = is_string($tmp) ? $tmp : $frag;
 
         // <mj-button ...>label</mj-button> + title=""
-        $tmp = preg_replace_callback('/<mj-button\b([^>]*)>(.*?)<\/mj-button>/si', function ($m) use ($targetLangApi, &$samples) {
+        $tmp = preg_replace_callback('/<mj-button\b([^>]*)>(.*?)<\/mj-button>/si', function ($m) use ($targetLangApi, &$samples): string {
             $attrs   = $m[1];
             $inner   = $m[2];
 
@@ -130,7 +132,7 @@ class MjmlTranslateService
             $innerTr = $this->translateInnerHtml($inner, $targetLangApi, $samples);
 
             // Translate title="..." (plain text) but preserve tokens/Twig segments
-            $attrsTr = preg_replace_callback('/\btitle="([^"]*)"/i', function ($mm) use ($targetLangApi, &$samples) {
+            $attrsTr = preg_replace_callback('/\btitle="([^"]*)"/i', function ($mm) use ($targetLangApi, &$samples): string {
                 $t = $this->translateAttributePreserveTokens($mm[1], $targetLangApi, $samples);
 
                 return 'title="'.htmlspecialchars($t, ENT_QUOTES).'"';
@@ -141,10 +143,10 @@ class MjmlTranslateService
         $frag = is_string($tmp) ? $tmp : $frag;
 
         // <mj-image ... alt="..."/>  (preserve self-closing)
-        $tmp = preg_replace_callback('/<mj-image\b([^>]*?)(\s*\/?)>/si', function ($m) use ($targetLangApi, &$samples) {
+        $tmp = preg_replace_callback('/<mj-image\b([^>]*?)(\s*\/?)>/si', function ($m) use ($targetLangApi, &$samples): string {
             $attrs   = $m[1];
             $closing = $m[2]; // always present per regex
-            $attrsTr = preg_replace_callback('/\balt="([^"]*)"/i', function ($mm) use ($targetLangApi, &$samples) {
+            $attrsTr = preg_replace_callback('/\balt="([^"]*)"/i', function ($mm) use ($targetLangApi, &$samples): string {
                 $t = $this->translateAttributePreserveTokens($mm[1], $targetLangApi, $samples);
 
                 return 'alt="'.htmlspecialchars($t, ENT_QUOTES).'"';
@@ -334,7 +336,7 @@ class MjmlTranslateService
      */
     private function extractAndShieldMjRaw(string $mjml, array &$blocks): string
     {
-        $res = preg_replace_callback('/<mj-raw>(.*?)<\/mj-raw>/si', function ($m) use (&$blocks) {
+        $res = preg_replace_callback('/<mj-raw>(.*?)<\/mj-raw>/si', function ($m) use (&$blocks): string {
             $key          = '__MJRAW_'.count($blocks).'__';
             $blocks[$key] = $m[0]; // entire block
 
@@ -352,7 +354,7 @@ class MjmlTranslateService
         if ([] === $blocks) {
             return $mjml;
         }
-        uksort($blocks, fn ($a, $b) => strlen($b) <=> strlen($a));
+        uksort($blocks, fn ($a, $b): int => strlen($b) <=> strlen($a));
 
         return strtr($mjml, $blocks);
     }

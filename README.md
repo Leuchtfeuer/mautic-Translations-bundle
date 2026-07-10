@@ -1,6 +1,6 @@
-# Translations by Leuchtfeuer (Mautic Plugin)
+# Translations by Leuchtfeuer
 
-## Overview / Purpose / Features
+## Overview
 
 Translate Mautic email content with the DeepL API—directly from your email detail page.
 
@@ -18,8 +18,11 @@ Translate Mautic email content with the DeepL API—directly from your email det
 
 ## Requirements / Version Support
 
-* **Mautic 5.x** (minimum **5.1**).
-* **PHP 8.1+** (matches Mautic 5 requirements).
+> [!TIP]
+> Other releases of this plugin may cover different Mautic versions!
+
+* **Mautic 7.x** (minimum **7.0**).
+* **PHP 8.2+** (matches Mautic 7 requirements).
 * **DeepL API key** (required).
 * **Optional:** `mjml` CLI on the server for best MJML→HTML rendering quality.
 

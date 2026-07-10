@@ -18,6 +18,7 @@
                 'Next step:\nOpen the Email Builder, review the translated content, and click Save.',
             please_choose_language: 'Please choose a language.',
             unexpected_error: 'Unexpected error, check console.',
+            test_api_connection: 'Test DeepL API',
         },
         NS.I18N || {}
     );
@@ -75,45 +76,37 @@
             { code: 'ZH-HANT', name: 'Chinese (Traditional)' },
         ];
 
-    // ---- Preserve your existing "Test Deepl API" button behavior ----
-    document.addEventListener('DOMContentLoaded', function () {
-        var btn = document.getElementById('test-deepl-api');
-        if (!btn) return;
+    NS.testApiConnection = function (btn) {
+        btn.disabled = true;
 
-        btn.addEventListener('click', function () {
-            btn.disabled = true;
-            var result = document.getElementById('deepl-api-test-result');
-            result.innerText = 'Testing...';
+        // Lazy-inject a result span after the button (once)
+        var result = btn.nextElementSibling;
+        if (!result || !result.classList.contains('lf-test-result')) {
+            result = document.createElement('span');
+            result.className = 'lf-test-result help-block';
+            btn.insertAdjacentElement('afterend', result);
+        }
+        result.className = 'lf-test-result help-block';
+        result.textContent = '…';
 
-            // Get CSRF token rendered by Mautic
-            var csrf = (typeof mauticAjaxCsrf !== 'undefined' && mauticAjaxCsrf) || '';
-            if (!csrf) {
-                result.innerText = 'Missing CSRF token';
-                btn.disabled = false;
-                return;
-            }
-
-            fetch('/s/plugin/ai-translate/test-api', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'X-CSRF-Token': csrf,
-                    'X-Requested-With': 'XMLHttpRequest',
-                    Accept: 'application/json',
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                },
-                body: '', // no body required
+        var csrf = (typeof mauticAjaxCsrf !== 'undefined' && mauticAjaxCsrf) || '';
+        fetch('/s/plugin/ai-translate/test-api', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-Token': csrf,
+            },
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                result.className = 'lf-test-result help-block ' + (d.success ? 'text-success' : 'text-danger');
+                result.textContent = d.message || (d.success ? 'Success' : 'Failed');
             })
-                .then((r) => r.json())
-                .then((data) => {
-                    result.innerText = data.message;
-                    btn.disabled = false;
-                })
-                .catch((e) => {
-                    console.error('LeuchtfeuerTranslations test-api error:', e);
-                    result.innerText = 'Request failed';
-                    btn.disabled = false;
-                });
-        });
-    });
+            .catch(function () {
+                result.className = 'lf-test-result help-block text-danger';
+                result.textContent = 'Request failed.';
+            })
+            .finally(function () { btn.disabled = false; });
+    };
 })(window);

@@ -1,45 +1,33 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Integration;
 
-use Mautic\PluginBundle\Integration\AbstractIntegration;
+use Mautic\IntegrationsBundle\Integration\BasicIntegration;
+use Mautic\IntegrationsBundle\Integration\ConfigurationTrait;
+use Mautic\IntegrationsBundle\Integration\Interfaces\BasicInterface;
 
-/** @phpstan-ignore-next-line */
-class LeuchtfeuerTranslationsIntegration extends AbstractIntegration
+class LeuchtfeuerTranslationsIntegration extends BasicIntegration implements BasicInterface
 {
-    public const NAME = 'LeuchtfeuerTranslations'; // machine name
+    use ConfigurationTrait;
+
+    public const NAME         = 'LeuchtfeuerTranslations';
+
+    public const DISPLAY_NAME = 'Translations by Leuchtfeuer';
 
     public function getName(): string
     {
         return self::NAME;
     }
 
-    /** @return array<string,string> */
-    public function getRequiredKeyFields(): array
-    {
-        return [
-            'deepl_api_key' => 'plugin.leuchtfeuertranslations.deepl_api_key',
-        ];
-    }
-
     public function getDisplayName(): string
     {
-        return 'Translations by Leuchtfeuer';
+        return self::DISPLAY_NAME;
     }
 
     public function getIcon(): string
     {
         return 'plugins/LeuchtfeuerTranslationsBundle/Assets/img/icon.png';
-    }
-
-    public function getAuthenticationType(): string
-    {
-        return 'keys';
-    }
-
-    public function isConfigured(): bool
-    {
-        // Let it be enabled/disabled immediately
-        return true;
     }
 }

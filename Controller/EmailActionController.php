@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MauticPlugin\LeuchtfeuerTranslationsBundle\Controller;
 
 use Mautic\CoreBundle\Controller\AbstractFormController;
@@ -8,8 +10,8 @@ use Mautic\EmailBundle\Entity\Email;
 use Mautic\EmailBundle\Model\EmailModel;
 use MauticPlugin\GrapesJsBuilderBundle\Entity\GrapesJsBuilder;
 use MauticPlugin\GrapesJsBuilderBundle\Model\GrapesJsBuilderModel;
+use MauticPlugin\LeuchtfeuerTranslationsBundle\Integration\Config;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\DeeplClientService;
-use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\FeatureGateService;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlCompileService;
 use MauticPlugin\LeuchtfeuerTranslationsBundle\Service\MjmlTranslateService;
 use Psr\Log\LoggerInterface;
@@ -30,82 +32,37 @@ class EmailActionController extends AbstractFormController
         LoggerInterface $logger,
         CorePermissions $security,
         TranslatorInterface $translator,
-        FeatureGateService $featureGate,
+        Config $config,
     ): Response {
         $logger->info('[LeuchtfeuerTranslations] translateAction start', [
             'objectId'   => $objectId,
             'targetLang' => $request->get('targetLang'),
         ]);
 
-        // Respect plugin toggle (Published switch in Plugins UI)
-        if (!$featureGate->isEnabled()) {
+        if (!$config->isPublished()) {
             $logger->info('[LeuchtfeuerTranslations] translateAction blocked: integration disabled');
 
-            return new JsonResponse(
-                [
-                    'success' => false,
-                    'message' => $translator->trans('plugin.leuchtfeuertranslations.error.integration_disabled'),
-                ],
-                Response::HTTP_FORBIDDEN
-            );
+            return $this->errorJson($translator, 'plugin.leuchtfeuertranslations.error.integration_disabled', Response::HTTP_FORBIDDEN);
         }
 
         /** @var EmailModel $model */
-        $model = $this->getModel(EmailModel::class);
-
-        /** @var Email|null $sourceEmail */
+        $model       = $this->getModel(EmailModel::class);
         $sourceEmail = $model->getEntity($objectId);
 
-        if (
-            null === $sourceEmail
-            || !$security->hasEntityAccess(
-                'email:emails:view:own',
-                'email:emails:view:other',
-                $sourceEmail->getCreatedBy()
-            )
-        ) {
+        if (null === $sourceEmail || !$security->hasEntityAccess('email:emails:view:own', 'email:emails:view:other', $sourceEmail->getCreatedBy())) {
             $logger->warning('[LeuchtfeuerTranslations] email not found or access denied', ['objectId' => $objectId]);
 
-            return new JsonResponse(
-                [
-                    'success' => false,
-                    'message' => $translator->trans('plugin.leuchtfeuertranslations.error.email_not_found_or_access_denied'),
-                ],
-                Response::HTTP_NOT_FOUND
-            );
+            return $this->errorJson($translator, 'plugin.leuchtfeuertranslations.error.email_not_found_or_access_denied', Response::HTTP_NOT_FOUND);
         }
 
-        /**
-         * Read input consistently based on HTTP verb (POST preferred).
-         * Check requirements BEFORE any processing to avoid unnecessary work.
-         */
-        $targetLangRaw = $request->isMethod('POST')
-            ? $request->request->get('targetLang')
-            : $request->query->get('targetLang');
-
-        $targetLangRaw = is_string($targetLangRaw) ? trim($targetLangRaw) : '';
-
+        $targetLangRaw = $this->resolveTargetLang($request);
         if ('' === $targetLangRaw) {
-            return new JsonResponse(
-                [
-                    'success' => false,
-                    'message' => $translator->trans('plugin.leuchtfeuertranslations.error.target_language_missing'),
-                ],
-                Response::HTTP_BAD_REQUEST
-            );
+            return $this->errorJson($translator, 'plugin.leuchtfeuertranslations.error.target_language_missing', Response::HTTP_BAD_REQUEST);
         }
 
-        // Normalize for DeepL (UPPER) and Mautic (lower)
         $targetLangApi = strtoupper($targetLangRaw);
         $targetLangIso = strtolower($targetLangApi);
 
-        // Avoid casting mixed -> string
-        $langVal          = $sourceEmail->getLanguage();
-        $sourceLangGuess  = is_string($langVal) ? strtolower($langVal) : '';
-        $nameVal          = $sourceEmail->getName();
-        $emailName        = is_string($nameVal) ? $nameVal : '';
-
-        // 1) Quick probe (do not leak probe details to client)
         $probe = $deepl->translate('Hello from Mautic', $targetLangApi);
         if (true !== $probe['success']) {
             $logger->error('[LeuchtfeuerTranslations] DeepL probe failed', [
@@ -114,110 +71,140 @@ class EmailActionController extends AbstractFormController
                 'status' => $probe['status'],
             ]);
 
-            return new JsonResponse([
-                'success' => false,
-                'message' => $translator->trans('plugin.leuchtfeuertranslations.error.deepl_probe_failed'),
-            ], Response::HTTP_BAD_REQUEST);
+            return $this->errorJson($translator, 'plugin.leuchtfeuertranslations.error.deepl_probe_failed', Response::HTTP_BAD_REQUEST);
         }
 
-        // Prepare GrapesJs model once; reuse
         /** @var GrapesJsBuilderModel $grapesModel */
         $grapesModel = $this->getModel(GrapesJsBuilderModel::class);
+        $mjml        = $this->fetchMjml((int) $sourceEmail->getId(), $grapesModel, $logger);
 
-        // 2) Read MJML using GrapesJsBuilderModel (avoid raw SQL / missing table prefix)
-        $mjml = '';
         try {
-            $grapes = $grapesModel->getGrapesJsFromEmailId((int) $sourceEmail->getId());
-            $mjml   = $grapes?->getCustomMjml() ?? '';
-        } catch (\Throwable $e) {
-            $logger->error('[LeuchtfeuerTranslations] Failed to fetch MJML via GrapesJsBuilderModel', [
-                'emailId' => $sourceEmail->getId(),
-                'ex'      => $e->getMessage(),
-            ]);
-        }
-
-        // 3) Clone the entity (pattern similar to AB test) + fix language casing and safe HTML
-        try {
-            $emailType = $sourceEmail->getEmailType();
-
-            /** @var Email $clone */
-            $clone = clone $sourceEmail;
-
-            // Restore fields / set our adjustments
-            $clone->setIsPublished(false);
-            $clone->setEmailType($emailType);
-            $clone->setVariantParent(null);
-
-            // Name + target language suffix (rtrim not needed)
-            $clone->setName(('' !== $emailName ? $emailName : 'Email').' ['.$targetLangApi.']');
-
-            // IMPORTANT: Mautic expects lowercase language code
-            $clone->setLanguage(('' !== $targetLangIso) ? $targetLangIso : $sourceLangGuess);
-
-            // Ensure HTML is not null (prevents PlainTextHelper error on /view)
-            $sourceHtml = $sourceEmail->getCustomHtml();
-            if (null === $sourceHtml) {
-                $sourceHtml = '<!doctype html><html><body></body></html>';
-            }
-            $clone->setCustomHtml($sourceHtml);
-
-            // Persist clone to get its ID
-            $model->saveEntity($clone);
-
-            // Ensure Doctrine assigned an ID (avoid casting null→0)
-            $cloneId = $clone->getId();
-            if (null === $cloneId) {
-                $logger->error('[LeuchtfeuerTranslations] Clone persisted but ID is still null');
-
-                return new JsonResponse([
-                    'success' => false,
-                    'message' => $translator->trans('plugin.leuchtfeuertranslations.error.clone_persist_failed'),
-                ], Response::HTTP_INTERNAL_SERVER_ERROR);
-            }
-            // No need to cast to int; Doctrine returns an int already.
+            $clone = $this->persistClone($sourceEmail, $targetLangApi, $targetLangIso, $model);
         } catch (\Throwable $e) {
             $logger->error('[LeuchtfeuerTranslations] Clone (entity __clone) failed', ['ex' => $e->getMessage()]);
 
-            return new JsonResponse([
-                'success' => false,
-                'message' => $translator->trans('plugin.leuchtfeuertranslations.error.clone_failed', ['%error%' => $e->getMessage()]),
-            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return $this->errorJson($translator, 'plugin.leuchtfeuertranslations.error.clone_failed', Response::HTTP_INTERNAL_SERVER_ERROR, ['%error%' => $e->getMessage()]);
         }
 
-        // 4) If we had MJML, write it to the clone via entity/repository (no raw SQL)
-        $wroteMjml = false;
-        if ('' !== $mjml) {
-            try {
-                /** @var GrapesJsBuilder|null $cloneGrapes */
-                $cloneGrapes = $grapesModel->getGrapesJsFromEmailId($cloneId);
-                if (null === $cloneGrapes) {
-                    $cloneGrapes = new GrapesJsBuilder();
-                    $cloneGrapes->setEmail($clone);
-                }
+        $cloneId = $clone->getId();
+        if (null === $cloneId) {
+            $logger->error('[LeuchtfeuerTranslations] Clone persisted but ID is still null');
 
-                if ($cloneGrapes->getCustomMjml() !== $mjml) {
-                    $cloneGrapes->setCustomMjml($mjml);
-                    $grapesModel->getRepository()->saveEntity($cloneGrapes);
-                }
-                $wroteMjml = true;
-            } catch (\Throwable $e) {
-                $logger->error('[LeuchtfeuerTranslations] Failed initial MJML write for clone (entity/repository)', [
-                    'cloneId' => $cloneId,
-                    'ex'      => $e->getMessage(),
-                ]);
+            return $this->errorJson($translator, 'plugin.leuchtfeuertranslations.error.clone_persist_failed', Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        $wroteMjml = $this->saveMjmlToClone($cloneId, $clone, $mjml, $grapesModel, $logger);
+
+        try {
+            $translation = $this->translateAndCompile($clone, $cloneId, $mjml, $targetLangApi, $mjmlService, $mjmlCompiler, $grapesModel, $model, $logger);
+        } catch (\Throwable $e) {
+            return $this->errorJson($translator, 'plugin.leuchtfeuertranslations.error.translation_failed', Response::HTTP_INTERNAL_SERVER_ERROR, ['%error%' => $e->getMessage()]);
+        }
+
+        $logger->info('[LeuchtfeuerTranslations] translateAction finished', [
+            'cloneId' => $cloneId,
+            'changed' => $translation,
+        ]);
+
+        return new JsonResponse($this->buildSuccessPayload($sourceEmail, $clone, $cloneId, $wroteMjml, $translation, $translator));
+    }
+
+    private function resolveTargetLang(Request $request): string
+    {
+        $raw = $request->isMethod('POST')
+            ? $request->request->get('targetLang')
+            : $request->query->get('targetLang');
+
+        return is_string($raw) ? trim($raw) : '';
+    }
+
+    private function fetchMjml(int $emailId, GrapesJsBuilderModel $grapesModel, LoggerInterface $logger): string
+    {
+        try {
+            $grapes = $grapesModel->getGrapesJsFromEmailId($emailId);
+
+            return $grapes?->getCustomMjml() ?? '';
+        } catch (\Throwable $e) {
+            $logger->error('[LeuchtfeuerTranslations] Failed to fetch MJML via GrapesJsBuilderModel', [
+                'emailId' => $emailId,
+                'ex'      => $e->getMessage(),
+            ]);
+
+            return '';
+        }
+    }
+
+    /**
+     * @throws \Throwable
+     */
+    private function persistClone(Email $source, string $targetLangApi, string $targetLangIso, EmailModel $model): Email
+    {
+        $emailName  = is_string($source->getName()) ? $source->getName() : '';
+        $sourceLang = is_string($source->getLanguage()) ? strtolower($source->getLanguage()) : '';
+
+        $clone = clone $source;
+        $clone->setIsPublished(false);
+        $clone->setEmailType($source->getEmailType());
+        $clone->setVariantParent();
+        $clone->setContent([]);
+        $clone->setName(('' !== $emailName ? $emailName : 'Email').' ['.$targetLangApi.']');
+        $clone->setLanguage('' !== $targetLangIso ? $targetLangIso : $sourceLang);
+        $clone->setCustomHtml($source->getCustomHtml() ?? '<!doctype html><html><body></body></html>');
+
+        $model->saveEntity($clone);
+
+        return $clone;
+    }
+
+    private function saveMjmlToClone(int $cloneId, Email $clone, string $mjml, GrapesJsBuilderModel $grapesModel, LoggerInterface $logger): bool
+    {
+        if ('' === $mjml) {
+            return false;
+        }
+
+        try {
+            $cloneGrapes = $grapesModel->getGrapesJsFromEmailId($cloneId);
+            if (null === $cloneGrapes) {
+                $cloneGrapes = new GrapesJsBuilder();
+                $cloneGrapes->setEmail($clone);
             }
-        }
+            if ($cloneGrapes->getCustomMjml() !== $mjml) {
+                $cloneGrapes->setCustomMjml($mjml);
+                $grapesModel->getRepository()->saveEntity($cloneGrapes);
+            }
 
-        // 5) Translate subject + MJML (if present) and set custom_html to compiled HTML
+            return true;
+        } catch (\Throwable $e) {
+            $logger->error('[LeuchtfeuerTranslations] Failed initial MJML write for clone', [
+                'cloneId' => $cloneId,
+                'ex'      => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    /**
+     * @return array{translatedSubject: string|null, translatedMjml: string|null, samples: array<int, array{from:string,to:string}>, mj: array<string, mixed>}
+     */
+    private function translateAndCompile(
+        Email $clone,
+        int $cloneId,
+        string $mjml,
+        string $targetLangApi,
+        MjmlTranslateService $mjmlService,
+        MjmlCompileService $mjmlCompiler,
+        GrapesJsBuilderModel $grapesModel,
+        EmailModel $model,
+        LoggerInterface $logger,
+    ): array {
         $translatedSubject = null;
         $translatedMjml    = null;
         $samples           = [];
-        $mj                = []; // ensure defined
+        $mj                = [];
 
         try {
-            // Subject (avoid casting mixed -> string)
-            $subjectVal  = $clone->getSubject();
-            $origSubject = is_string($subjectVal) ? $subjectVal : '';
+            $origSubject = is_string($clone->getSubject()) ? $clone->getSubject() : '';
             if ('' !== $origSubject) {
                 $translatedSubject = $mjmlService->translateRichText($origSubject, $targetLangApi, $samples);
                 if ($translatedSubject !== $origSubject) {
@@ -225,28 +212,16 @@ class EmailActionController extends AbstractFormController
                 }
             }
 
-            // MJML
             if ('' !== $mjml) {
                 $mj             = $mjmlService->translateMjml($mjml, $targetLangApi);
                 $translatedMjml = $mj['mjml'];
 
-                /** @var GrapesJsBuilder|null $cloneGrapes */
-                $cloneGrapes = $grapesModel->getGrapesJsFromEmailId($cloneId);
-                if (null === $cloneGrapes) {
-                    $cloneGrapes = new GrapesJsBuilder();
-                    $cloneGrapes->setEmail($clone);
-                }
-                if ($cloneGrapes->getCustomMjml() !== $translatedMjml) {
-                    $cloneGrapes->setCustomMjml($translatedMjml);
-                    $grapesModel->getRepository()->saveEntity($cloneGrapes);
-                }
+                $this->saveTranslatedMjml($cloneId, $clone, $translatedMjml, $grapesModel);
 
-                // Compile MJML → HTML and set as custom_html so preview reflects translation immediately
                 $compiled     = $mjmlCompiler->compile($translatedMjml);
-                $compileOk    = $compiled['success'];
                 $compiledHtml = isset($compiled['html']) && is_string($compiled['html']) ? $compiled['html'] : '';
 
-                if ($compileOk && '' !== $compiledHtml) {
+                if ($compiled['success'] && '' !== $compiledHtml) {
                     $clone->setCustomHtml($compiledHtml);
                 } else {
                     $logger->warning('[LeuchtfeuerTranslations] MJML compile failed; keeping existing custom_html', [
@@ -256,31 +231,67 @@ class EmailActionController extends AbstractFormController
                 }
             }
 
-            // Save updated entity LAST so custom_html is persisted after translation
             $model->saveEntity($clone);
         } catch (\Throwable $e) {
             $logger->error('[LeuchtfeuerTranslations] Translation / compile step failed', ['cloneId' => $cloneId, 'ex' => $e->getMessage()]);
+            throw $e;
         }
 
-        // 6) Done
-        $lockedMode  = isset($mj['lockedMode']) ? (bool) $mj['lockedMode'] : false;
+        return [
+            'translatedSubject' => $translatedSubject,
+            'translatedMjml'    => $translatedMjml,
+            'samples'           => $samples,
+            'mj'                => $mj,
+        ];
+    }
+
+    private function saveTranslatedMjml(int $cloneId, Email $clone, string $translatedMjml, GrapesJsBuilderModel $grapesModel): void
+    {
+        $cloneGrapes = $grapesModel->getGrapesJsFromEmailId($cloneId);
+        if (null === $cloneGrapes) {
+            $cloneGrapes = new GrapesJsBuilder();
+            $cloneGrapes->setEmail($clone);
+        }
+        if ($cloneGrapes->getCustomMjml() !== $translatedMjml) {
+            $cloneGrapes->setCustomMjml($translatedMjml);
+            $grapesModel->getRepository()->saveEntity($cloneGrapes);
+        }
+    }
+
+    /**
+     * @param array{translatedSubject: string|null, translatedMjml: string|null, samples: array<int, array{from:string,to:string}>, mj: array<string, mixed>} $translation
+     *
+     * @return array<string, mixed>
+     */
+    private function buildSuccessPayload(
+        Email $sourceEmail,
+        Email $clone,
+        int $cloneId,
+        bool $wroteMjml,
+        array $translation,
+        TranslatorInterface $translator,
+    ): array {
+        $emailName   = is_string($sourceEmail->getName()) ? $sourceEmail->getName() : '';
+        $sourceLang  = is_string($sourceEmail->getLanguage()) ? strtolower($sourceEmail->getLanguage()) : '';
+        $mj          = $translation['mj'];
+        $lockedMode  = isset($mj['lockedMode']) && (bool) $mj['lockedMode'];
         $lockedPairs = isset($mj['lockedPairs']) ? (int) $mj['lockedPairs'] : 0;
 
-        $payload = [
+        return [
             'success' => true,
             'message' => $translator->trans('plugin.leuchtfeuertranslations.done'),
             'source'  => [
-                'emailId'   => $sourceEmail->getId(),
-                'name'      => $emailName,
-                'language'  => $sourceLangGuess,      // e.g. "en"
-                'template'  => $sourceEmail->getTemplate(),
+                'emailId'  => $sourceEmail->getId(),
+                'name'     => $emailName,
+                'language' => $sourceLang,
+                'template' => $sourceEmail->getTemplate(),
             ],
             'clone'   => [
                 'emailId'   => $cloneId,
                 'name'      => $clone->getName(),
                 'subject'   => $clone->getSubject(),
                 'template'  => $clone->getTemplate(),
-                'language'  => $clone->getLanguage(), // lowercase (e.g. "de")
+                'language'  => $clone->getLanguage(),
                 'mjmlWrite' => $wroteMjml,
                 'urls'      => [
                     'edit'    => $this->generateUrl('mautic_email_action', ['objectAction' => 'edit',    'objectId' => $cloneId], UrlGeneratorInterface::ABSOLUTE_URL),
@@ -290,21 +301,24 @@ class EmailActionController extends AbstractFormController
                 ],
             ],
             'translation' => [
-                'subjectChanged' => (null !== $translatedSubject),
-                'mjmlChanged'    => (null !== $translatedMjml),
-                'samples'        => array_slice($samples, 0, 4),
+                'subjectChanged' => null !== $translation['translatedSubject'],
+                'mjmlChanged'    => null !== $translation['translatedMjml'],
+                'samples'        => array_slice($translation['samples'], 0, 4),
                 'lockedMode'     => $lockedMode,
                 'lockedPairs'    => $lockedPairs,
             ],
-            // NOTE: removed 'deeplProbe' block from client response to avoid leaking details
             'note' => $translator->trans('plugin.leuchtfeuertranslations.note_compiled_from_translated_mjml'),
         ];
+    }
 
-        $logger->info('[LeuchtfeuerTranslations] translateAction finished', [
-            'cloneId'  => $cloneId,
-            'changed'  => $payload['translation'],
-        ]);
-
-        return new JsonResponse($payload);
+    /**
+     * @param array<string, string> $params
+     */
+    private function errorJson(TranslatorInterface $translator, string $key, int $status, array $params = []): JsonResponse
+    {
+        return new JsonResponse(
+            ['success' => false, 'message' => $translator->trans($key, $params)],
+            $status
+        );
     }
 }
